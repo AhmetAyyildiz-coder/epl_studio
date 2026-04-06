@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent, type WheelEvent as ReactWheelEvent } from "react";
+import { useEffect, useMemo, useState, useCallback, memo, type KeyboardEvent as ReactKeyboardEvent, type WheelEvent as ReactWheelEvent } from "react";
 import { Rnd } from "react-rnd";
 import {
   Alert,
@@ -396,7 +396,6 @@ const CODE39_PATTERNS: Record<string, number[]> = {
 
 function generateCode39Bars(text: string, narrow: number, wide: number): Array<{x: number; width: number}> {
   const bars: Array<{x: number; width: number}> = [];
-  const charWidth = (narrow * 3 + wide * 6) * 2; // Approximate width per character
   let xPos = 8; // Start padding
 
   // Add start character
@@ -789,7 +788,7 @@ function submitEpl(epl: string) {
   document.body.removeChild(form);
 }
 
-function ElementPreview({
+const ElementPreview = memo(function ElementPreview({
   commands,
   selectedId,
   onSelect,
@@ -1005,7 +1004,7 @@ function ElementPreview({
       </Box>
     </Box>
   );
-}
+});
 
 export default function App() {
   const [layouts, setLayouts] = useState<LayoutDraft[]>(() => readLayouts());
@@ -1014,6 +1013,9 @@ export default function App() {
   const [dataSource, setDataSource] = useState<DataSourceConfig>({
     jsonText: SAMPLE_DATA_JSON,
   });
+
+  // Debounce JSON input to reduce parsing overhead
+  const debouncedJsonText = useDebounce(dataSource.jsonText, 500);
   const [records, setRecords] = useState<DataRecord[]>(() => normalizeRecords(JSON.parse(SAMPLE_DATA_JSON)));
   const [selectedRecordIndex, setSelectedRecordIndex] = useState(0);
   const [selectedRecordIndexes, setSelectedRecordIndexes] = useState<number[]>([0]);
@@ -1035,7 +1037,7 @@ export default function App() {
 
   const activeRecord = records[selectedRecordIndex];
   const previewCommands = useMemo(() => buildPreviewCommands(draft, activeRecord), [draft, activeRecord]);
-  const selectedElement = draft.elements.find((element) => element.id === selectedElementId) ?? null;
+  const selectedElement = useMemo(() => draft.elements.find((element) => element.id === selectedElementId) ?? null, [draft.elements, selectedElementId]);
   const datasetKeys = useMemo(() => Array.from(new Set(records.flatMap((record) => Object.keys(record)))), [records]);
   // TODO: API sozlesmesi netlesince { name: draft.name, eplDesign: selectedEpl } payload'i buradan gonderilecek.
   const selectedEpl = useMemo(() => {
@@ -1053,7 +1055,24 @@ export default function App() {
     setEditedEpl(selectedEpl);
   }, [selectedEpl]);
 
-  function selectLayout(layoutId: string) {
+  // Optimize JSON parsing to only run when debounced
+  useEffect(() => {
+    if (debouncedJsonText !== dataSource.jsonText) {
+      try {
+        const payload = JSON.parse(debouncedJsonText) as unknown;
+        const nextRecords = normalizeRecords(payload);
+        if (nextRecords.length) {
+          setRecords(nextRecords);
+          setSelectedRecordIndex(0);
+          setSelectedRecordIndexes([0]);
+        }
+      } catch {
+        // Silent fail during typing, user will explicitly apply when ready
+      }
+    }
+  }, [debouncedJsonText]);
+
+  const selectLayout = useCallback((layoutId: string) => {
     const layout = layouts.find((item) => item.id === layoutId);
     if (!layout) {
       return;
@@ -1065,7 +1084,7 @@ export default function App() {
     });
     setSelectedElementId(layout.elements[0]?.id ?? null);
     setMessage(`"${layout.name}" acildi.`);
-  }
+  }, [layouts]);
 
   function saveLayout() {
     if (!draft.name.trim()) {
@@ -1103,62 +1122,64 @@ export default function App() {
     setMessage("Canvas sifirlandi.");
   }
 
-  function updateDraftName(name: string) {
+  const updateDraftName = useCallback((name: string) => {
     setDraft((prev) => ({ ...prev, name }));
-  }
+  }, []);
 
-  function updateElement(id: string, patch: Partial<CanvasElement>) {
-    setDraft((prev) => ({
-      ...prev,
-      elements: prev.elements.map((element) =>
+  const updateElement = useCallback((id: string, patch: Partial<CanvasElement>) => {
+    setDraft((prev) => {
+      const elements = prev.elements.map((element) =>
         element.id === id ? ({ ...element, ...patch } as CanvasElement) : element,
-      ),
-    }));
-  }
+      );
+      return { ...prev, elements };
+    });
+  }, []);
 
-  function addElement(type: ElementType) {
-    const baseX = 30;
-    const baseY = 40 + draft.elements.length * 12;
+  const addElement = useCallback((type: ElementType) => {
+    setDraft((prev) => {
+      const baseX = 30;
+      const baseY = 40 + prev.elements.length * 12;
 
-    let element: CanvasElement;
-    if (type === "text") {
-      element = textElement("Yeni Metin", "", baseX, baseY, 2);
-    } else if (type === "line") {
-      element = {
-        id: uid(),
-        type: "line",
-        label: "Cizgi",
-        x: baseX,
-        y: baseY,
-        orientation: "horizontal",
-        width: 220,
-        height: 3,
-      };
-    } else if (type === "box") {
-      element = { id: uid(), type: "box", label: "Kutu", x: baseX, y: baseY, width: 180, height: 70, thickness: 2 };
-    } else {
-      element = {
-        id: uid(),
-        type: "barcode",
-        label: "Barcode",
-        x: baseX,
-        y: baseY,
-        binding: "barkod",
-        staticText: "BARCODE123",
-        barcodeType: "1",
-        narrow: 2,
-        wide: 4,
-        height: 82,
-        humanReadable: false,
-      };
-    }
+      let element: CanvasElement;
+      if (type === "text") {
+        element = textElement("Yeni Metin", "", baseX, baseY, 2);
+      } else if (type === "line") {
+        element = {
+          id: uid(),
+          type: "line",
+          label: "Cizgi",
+          x: baseX,
+          y: baseY,
+          orientation: "horizontal",
+          width: 220,
+          height: 3,
+        };
+      } else if (type === "box") {
+        element = { id: uid(), type: "box", label: "Kutu", x: baseX, y: baseY, width: 180, height: 70, thickness: 2 };
+      } else {
+        element = {
+          id: uid(),
+          type: "barcode",
+          label: "Barcode",
+          x: baseX,
+          y: baseY,
+          binding: "barkod",
+          staticText: "BARCODE123",
+          barcodeType: "1",
+          narrow: 2,
+          wide: 4,
+          height: 82,
+          humanReadable: false,
+        };
+      }
 
-    setDraft((prev) => ({ ...prev, elements: [...prev.elements, element] }));
-    setSelectedElementId(element.id);
-    setMessage(`${type} elemani eklendi.`);
-  }
+      setSelectedElementId(element.id);
+      setMessage(`${type} elemani eklendi.`);
+      return { ...prev, elements: [...prev.elements, element] };
+    });
+  }, []);
 
-  function removeSelectedElement() {
+  const removeSelectedElement = useCallback(() => {
     if (!selectedElementId) {
       return;
     }
@@ -1168,7 +1189,7 @@ export default function App() {
     }));
     setSelectedElementId(null);
     setMessage("Eleman silindi.");
-  }
+  }, [selectedElementId]);
 
   function clearAllElements() {
     setDraft((prev) => ({
@@ -1205,7 +1226,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedElementId]);
 
-  function applyJsonData() {
+  const applyJsonData = useCallback(() => {
     try {
       const payload = JSON.parse(dataSource.jsonText) as unknown;
       const nextRecords = normalizeRecords(payload);
@@ -1219,9 +1240,9 @@ export default function App() {
     } catch (error) {
       setMessage(`JSON gecersiz: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
     }
-  }
+  }, [dataSource.jsonText]);
 
-  function printSelectedRecords() {
+  const printSelectedRecords = useCallback(() => {
     if (!selectedRecordIndexes.length) {
       setMessage("Yazdirma icin secili kayit yok.");
       return;
@@ -1231,9 +1252,9 @@ export default function App() {
     const shiftedEpl = applyEplOffset(rawEpl, printOffsetX, printOffsetY);
     submitEpl(shiftedEpl);
     setMessage(`${selectedRecordIndexes.length} kayit yazdirma servisine gonderildi.`);
-  }
+  }, [editedEpl, selectedEpl, printOffsetX, printOffsetY, selectedRecordIndexes]);
 
-  async function copyEplToClipboard() {
+  const copyEplToClipboard = useCallback(async () => {
     if (!editedEpl) {
       setMessage("Kopyalanacak EPL cikti yok.");
       return;
@@ -1245,7 +1266,7 @@ export default function App() {
     } catch (error) {
       setMessage(`EPL kopyalanamadi: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
     }
-  }
+  }, [editedEpl]);
 
   function applyEditedEplToPreview() {
     const parsed = parseEplToElements(editedEpl, printOffsetX, printOffsetY);
@@ -1262,27 +1283,47 @@ export default function App() {
     setMessage(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
   }
 
-  function handleNumberFieldWheel(event: ReactWheelEvent<HTMLDivElement>) {
+  const handleNumberFieldWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
     // Prevent wheel scroll on number fields by blurring the input
     // This avoids the passive event listener issue
+    event.preventDefault();
+    event.stopPropagation();
     (event.target as HTMLInputElement).blur();
-  }
+  }, []);
 
-  function handleNumberFieldArrow(
+  const handleNumberFieldArrow = useCallback((
     event: ReactKeyboardEvent<HTMLDivElement>,
     value: number,
     onValueChange: (next: number) => void,
     min = 0,
     step = 1,
-  ) {
+  ) => {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
       return;
     }
 
     event.preventDefault();
+    event.stopPropagation();
     const direction = event.key === "ArrowUp" ? 1 : -1;
     onValueChange(Math.max(min, (Number(value) || 0) + direction * step));
-  }
+  }, []);
+
+// Debounce hook for performance optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
@@ -1396,7 +1437,7 @@ export default function App() {
                   commands={previewCommands}
                   selectedId={selectedElementId}
                   onSelect={setSelectedElementId}
-                  onMove={(id, x, y) => updateElement(id, { x, y })}
+                  onMove={useCallback((id: string, x: number, y: number) => updateElement(id, { x, y }), [updateElement])}
                 />
               </Paper>
 
