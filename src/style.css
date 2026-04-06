@@ -1,0 +1,55 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: #1f2522;
+}
+
+.hero-panel {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(0, 77, 64, 0.16), transparent 38%),
+    radial-gradient(circle at 78% 20%, rgba(191, 54, 12, 0.18), transparent 14%),
+    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.72), transparent 18%);
+  pointer-events: none;
+}
+
+.MuiPaper-root {
+  border: 1px solid rgba(76, 84, 78, 0.09);
+}
+
+.MuiTableCell-root {
+  vertical-align: top;
+}
+
+.MuiInputBase-root {
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.MuiListItemButton-root {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 77, 64, 0.28);
+  border-radius: 999px;
+}
