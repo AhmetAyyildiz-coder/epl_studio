@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, memo, type KeyboardEvent as ReactKeyboardEvent, type WheelEvent as ReactWheelEvent } from "react";
+import { useEffect, useMemo, useState, useCallback, memo, startTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Rnd } from "react-rnd";
 import {
   Alert,
@@ -488,6 +488,23 @@ function wrapText(value: string, fontSize: number, wrapWidth: number, maxLines: 
   return visibleLines;
 }
 
+function getElementBottom(element: CanvasElement) {
+  switch (element.type) {
+    case "text": {
+      const fontSize = FONT_HEIGHT_MAP[element.font];
+      const text = element.staticText || element.label;
+      const lines = wrapText(text, fontSize, element.wrapWidth, element.maxLines);
+      const lineHeight = fontSize + 4;
+      return element.y + lines.length * lineHeight;
+    }
+    case "line":
+      return element.y + Math.max(8, element.height);
+    case "box":
+    case "barcode":
+      return element.y + element.height;
+  }
+}
+
 function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | undefined): PreviewCommand[] {
   return layout.elements.map((element) => {
     if (element.type === "text") {
@@ -874,7 +891,7 @@ const ElementPreview = memo(function ElementPreview({
                           : "flex-start",
                     border: `1px dashed ${stroke}`,
                     bgcolor: fill,
-                    borderRadius: 1,
+                    borderRadius: 0,
                     cursor: "grab",
                     userSelect: "none",
                     fontFamily: "monospace",
@@ -1023,6 +1040,22 @@ export default function App() {
   const [printOffsetX, setPrintOffsetX] = useState(DEFAULT_PRINT_OFFSET_X);
   const [printOffsetY, setPrintOffsetY] = useState(DEFAULT_PRINT_OFFSET_Y);
   const [message, setMessage] = useState("Veri kaynagi yukleyin, canvas ustunde elemanlari tasiyin ve secili kayitlari yazdirin.");
+
+  // Optimize message updates to reduce re-renders
+  const setMessageOptimized = useCallback((msg: string) => {
+    setMessage(msg);
+  }, []);
+
+  // Core element update function - must be defined before other functions that use it
+  const updateElement = useCallback((id: string, patch: Partial<CanvasElement>) => {
+    setDraft((prev) => {
+      const elements = prev.elements.map((element) =>
+        element.id === id ? ({ ...element, ...patch } as CanvasElement) : element,
+      );
+      return { ...prev, elements };
+    });
+  }, []);
+
   const [editedEpl, setEditedEpl] = useState(() => {
     // Başlangıç EPL'sini hesapla
     if (!selectedRecordIndexes.length) return "";
@@ -1055,6 +1088,14 @@ export default function App() {
     setEditedEpl(selectedEpl);
   }, [selectedEpl]);
 
+  // MUI Select hatası için: Seçili element ID'sini validate et
+  useEffect(() => {
+    if (selectedElementId && !draft.elements.find(el => el.id === selectedElementId)) {
+      // Seçili element artık mevcut değilse, sıfırla
+      setSelectedElementId(draft.elements[0]?.id ?? null);
+    }
+  }, [selectedElementId, draft.elements]);
+
   // Optimize JSON parsing to only run when debounced
   useEffect(() => {
     if (debouncedJsonText !== dataSource.jsonText) {
@@ -1083,12 +1124,12 @@ export default function App() {
       elements: layout.elements.map((element) => ({ ...element })),
     });
     setSelectedElementId(layout.elements[0]?.id ?? null);
-    setMessage(`"${layout.name}" acildi.`);
+    setMessageOptimized(`"${layout.name}" acildi.`);
   }, [layouts]);
 
-  function saveLayout() {
+  const saveLayout = useCallback(() => {
     if (!draft.name.trim()) {
-      setMessage("Taslak adi zorunlu.");
+      setMessageOptimized("Taslak adi zorunlu.");
       return;
     }
     setLayouts((prev) => {
@@ -1099,83 +1140,86 @@ export default function App() {
       return [draft, ...prev];
     });
     setSelectedLayoutId(draft.id);
-    setMessage(`"${draft.name}" kaydedildi.`);
-  }
+    setMessageOptimized(`"${draft.name}" kaydedildi.`);
+  }, [draft]);
 
-  function duplicateLayout() {
-    const next = {
-      ...draft,
-      id: uid(),
-      name: `${draft.name} Kopya`,
-      elements: draft.elements.map((element) => ({ ...element })),
-    };
-    setDraft(next);
-    setSelectedLayoutId(next.id);
-    setSelectedElementId(next.elements[0]?.id ?? null);
-    setMessage("Taslak kopyalandi.");
-  }
+  const duplicateLayout = useCallback(() => {
+    setDraft((prev) => {
+      const next = {
+        ...prev,
+        id: uid(),
+        name: `${prev.name} Kopya`,
+        elements: prev.elements.map((element) => ({ ...element })),
+      };
+      setSelectedLayoutId(next.id);
+      setSelectedElementId(next.elements[0]?.id ?? null);
+      setMessageOptimized("Taslak kopyalandi.");
+      return next;
+    });
+  }, []);
 
-  function resetLayout() {
-    const next = emptyLayout(draft.name);
-    setDraft(next);
-    setSelectedElementId(next.elements[0]?.id ?? null);
-    setMessage("Canvas sifirlandi.");
-  }
+  const resetLayout = useCallback(() => {
+    setDraft(() => {
+      const next = emptyLayout(draft.name);
+      setSelectedElementId(next.elements[0]?.id ?? null);
+      setMessageOptimized("Canvas sifirlandi.");
+      return next;
+    });
+  }, [draft.name]);
 
   const updateDraftName = useCallback((name: string) => {
     setDraft((prev) => ({ ...prev, name }));
   }, []);
 
-  const updateElement = useCallback((id: string, patch: Partial<CanvasElement>) => {
-    setDraft((prev) => {
-      const elements = prev.elements.map((element) =>
-        element.id === id ? ({ ...element, ...patch } as CanvasElement) : element,
-      );
-      return { ...prev, elements };
-    });
-  }, []);
-
   const addElement = useCallback((type: ElementType) => {
-    setDraft((prev) => {
-      const baseX = 30;
-      const baseY = 40 + prev.elements.length * 12;
+    startTransition(() => {
+      setDraft((prev) => {
+        const baseX = 30;
+        // Optimize position calculation - cache result to avoid repeated calculations
+        let baseY = 40;
+        if (prev.elements.length > 0) {
+          const maxBottom = Math.max(...prev.elements.map((element) => getElementBottom(element)));
+          baseY = Math.min(LABEL_HEIGHT_DOTS - 40, maxBottom + 12);
+        }
 
-      let element: CanvasElement;
-      if (type === "text") {
-        element = textElement("Yeni Metin", "", baseX, baseY, 2);
-      } else if (type === "line") {
-        element = {
-          id: uid(),
-          type: "line",
-          label: "Cizgi",
-          x: baseX,
-          y: baseY,
-          orientation: "horizontal",
-          width: 220,
-          height: 3,
-        };
-      } else if (type === "box") {
-        element = { id: uid(), type: "box", label: "Kutu", x: baseX, y: baseY, width: 180, height: 70, thickness: 2 };
-      } else {
-        element = {
-          id: uid(),
-          type: "barcode",
-          label: "Barcode",
-          x: baseX,
-          y: baseY,
-          binding: "barkod",
-          staticText: "BARCODE123",
-          barcodeType: "1",
-          narrow: 2,
-          wide: 4,
-          height: 82,
-          humanReadable: false,
-        };
-      }
+        let element: CanvasElement;
+        if (type === "text") {
+          element = textElement("Yeni Metin", "", baseX, baseY, 2);
+        } else if (type === "line") {
+          element = {
+            id: uid(),
+            type: "line",
+            label: "Cizgi",
+            x: baseX,
+            y: baseY,
+            orientation: "horizontal",
+            width: 220,
+            height: 3,
+          };
+        } else if (type === "box") {
+          element = { id: uid(), type: "box", label: "Kutu", x: baseX, y: baseY, width: 180, height: 70, thickness: 2 };
+        } else {
+          element = {
+            id: uid(),
+            type: "barcode",
+            label: "Barcode",
+            x: baseX,
+            y: baseY,
+            binding: "barkod",
+            staticText: "BARCODE123",
+            barcodeType: "1",
+            narrow: 2,
+            wide: 4,
+            height: 82,
+            humanReadable: false,
+          };
+        }
 
-      setSelectedElementId(element.id);
-      setMessage(`${type} elemani eklendi.`);
-      return { ...prev, elements: [...prev.elements, element] };
+        // Update selected element immediately to avoid MUI Select warning
+        setSelectedElementId(element.id);
+        setMessageOptimized(`${type} elemani eklendi.`);
+        return { ...prev, elements: [...prev.elements, element] };
+      });
     });
   }, []);
 
@@ -1188,17 +1232,17 @@ export default function App() {
       elements: prev.elements.filter((element) => element.id !== selectedElementId),
     }));
     setSelectedElementId(null);
-    setMessage("Eleman silindi.");
+    setMessageOptimized("Eleman silindi.");
   }, [selectedElementId]);
 
-  function clearAllElements() {
+  const clearAllElements = useCallback(() => {
     setDraft((prev) => ({
       ...prev,
       elements: [],
     }));
     setSelectedElementId(null);
-    setMessage("Tum elemanlar temizlendi.");
-  }
+    setMessageOptimized("Tum elemanlar temizlendi.");
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1236,42 +1280,42 @@ export default function App() {
       setRecords(nextRecords);
       setSelectedRecordIndex(0);
       setSelectedRecordIndexes([0]);
-      setMessage(`${nextRecords.length} kayit JSON'dan yuklendi.`);
+      setMessageOptimized(`${nextRecords.length} kayit JSON'dan yuklendi.`);
     } catch (error) {
-      setMessage(`JSON gecersiz: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
+      setMessageOptimized(`JSON gecersiz: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
     }
   }, [dataSource.jsonText]);
 
   const printSelectedRecords = useCallback(() => {
     if (!selectedRecordIndexes.length) {
-      setMessage("Yazdirma icin secili kayit yok.");
+      setMessageOptimized("Yazdirma icin secili kayit yok.");
       return;
     }
 
     const rawEpl = editedEpl || selectedEpl;
     const shiftedEpl = applyEplOffset(rawEpl, printOffsetX, printOffsetY);
     submitEpl(shiftedEpl);
-    setMessage(`${selectedRecordIndexes.length} kayit yazdirma servisine gonderildi.`);
+    setMessageOptimized(`${selectedRecordIndexes.length} kayit yazdirma servisine gonderildi.`);
   }, [editedEpl, selectedEpl, printOffsetX, printOffsetY, selectedRecordIndexes]);
 
   const copyEplToClipboard = useCallback(async () => {
     if (!editedEpl) {
-      setMessage("Kopyalanacak EPL cikti yok.");
+      setMessageOptimized("Kopyalanacak EPL cikti yok.");
       return;
     }
 
     try {
       await navigator.clipboard.writeText(editedEpl);
-      setMessage("EPL cikti panoya kopyalandi.");
+      setMessageOptimized("EPL cikti panoya kopyalandi.");
     } catch (error) {
-      setMessage(`EPL kopyalanamadi: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
+      setMessageOptimized(`EPL kopyalanamadi: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
     }
   }, [editedEpl]);
 
-  function applyEditedEplToPreview() {
+  const applyEditedEplToPreview = useCallback(() => {
     const parsed = parseEplToElements(editedEpl, printOffsetX, printOffsetY);
     if (!parsed.length) {
-      setMessage("EPL parse edilemedi. A/LO/X/B komutlarini kontrol edin.");
+      setMessageOptimized("EPL parse edilemedi. A/LO/X/B komutlarini kontrol edin.");
       return;
     }
 
@@ -1280,16 +1324,8 @@ export default function App() {
       elements: parsed,
     }));
     setSelectedElementId(parsed[0]?.id ?? null);
-    setMessage(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
-  }
-
-  const handleNumberFieldWheel = useCallback((event: ReactWheelEvent<HTMLDivElement>) => {
-    // Prevent wheel scroll on number fields by blurring the input
-    // This avoids the passive event listener issue
-    event.preventDefault();
-    event.stopPropagation();
-    (event.target as HTMLInputElement).blur();
-  }, []);
+    setMessageOptimized(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
+  }, [editedEpl, printOffsetX, printOffsetY]);
 
   const handleNumberFieldArrow = useCallback((
     event: ReactKeyboardEvent<HTMLDivElement>,
@@ -1326,13 +1362,34 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
   return (
-    <Box sx={{ px: { xs: 2, md: 3 }, py: { xs: 2, md: 3 } }}>
+    <Box sx={{
+      px: { xs: 2, md: 3 },
+      py: { xs: 2, md: 3 },
+      "& .MuiOutlinedInput-root": {
+        borderRadius: 0, // Tam kare/dikdörtgen şekil
+      },
+      "& .MuiFormControl-root .MuiOutlinedInput-root": {
+        borderRadius: 0,
+      },
+      "& .MuiSelect-root": {
+        borderRadius: 0,
+      },
+      "& .MuiButtonBase-root": {
+        borderRadius: 0,
+      },
+      "& .MuiPaper-root": {
+        borderRadius: 0,
+      },
+      "& .MuiChip-root": {
+        borderRadius: 0,
+      },
+    }}>
       <Stack spacing={2}>
         <Paper sx={{ p: 2 }}>
           <Stack spacing={1}>
             <Typography variant="overline">Durum</Typography>
             <Typography variant="body1">{layouts.length} taslak, {records.length} veri kaydi</Typography>
-            <Alert severity="info" sx={{ borderRadius: 3 }}>{message}</Alert>
+            <Alert severity="info" sx={{ borderRadius: 0 }}>{message}</Alert>
           </Stack>
         </Paper>
 
@@ -1360,7 +1417,7 @@ function useDebounce<T>(value: T, delay: number): T {
                       key={layout.id}
                       selected={layout.id === selectedLayoutId}
                       onClick={() => selectLayout(layout.id)}
-                      sx={{ mb: 1, borderRadius: 3 }}
+                      sx={{ mb: 1, borderRadius: 0 }}
                     >
                       <ListItemText primary={layout.name} secondary={`${layout.elements.length} eleman`} />
                     </ListItemButton>
@@ -1379,7 +1436,12 @@ function useDebounce<T>(value: T, delay: number): T {
                     multiline
                     minRows={10}
                     value={dataSource.jsonText}
-                    onChange={(event) => setDataSource((prev) => ({ ...prev, jsonText: event.target.value }))}
+                    onChange={(event) => {
+                      const newValue = event.target.value;
+                      startTransition(() => {
+                        setDataSource((prev) => ({ ...prev, jsonText: newValue }));
+                      });
+                    }}
                   />
                   <Button variant="contained" onClick={applyJsonData}>JSON Uygula</Button>
                 </Stack>
@@ -1392,7 +1454,12 @@ function useDebounce<T>(value: T, delay: number): T {
             <Stack spacing={2}>
               <Paper sx={{ p: 2 }}>
                 <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }}>
-                  <TextField label="Taslak Adi" value={draft.name} onChange={(event) => updateDraftName(event.target.value)} sx={{ minWidth: 240 }} />
+                  <TextField label="Taslak Adi" value={draft.name} onChange={(event) => {
+                    const newName = event.target.value;
+                    startTransition(() => {
+                      updateDraftName(newName);
+                    });
+                  }} sx={{ minWidth: 240 }} />
                   <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                     <Button variant="outlined" onClick={duplicateLayout}>Kopyala</Button>
                     <Button variant="outlined" color="warning" onClick={resetLayout}>Sifirla</Button>
@@ -1415,9 +1482,13 @@ function useDebounce<T>(value: T, delay: number): T {
                       label="X Ofset"
                       type="number"
                       value={printOffsetX}
-                      onChange={(event) => setPrintOffsetX(Number(event.target.value) || 0)}
+                      onChange={(event) => {
+                        const newValue = Number((event.target as HTMLInputElement).value) || 0;
+                        startTransition(() => {
+                          setPrintOffsetX(newValue);
+                        });
+                      }}
                       onBlur={() => setPrintOffsetX((prev) => Math.max(0, prev || 0))}
-                      onWheel={handleNumberFieldWheel}
                       onKeyDown={(event) => handleNumberFieldArrow(event, printOffsetX, setPrintOffsetX, 0)}
                     />
                     <TextField
@@ -1425,9 +1496,13 @@ function useDebounce<T>(value: T, delay: number): T {
                       label="Y Ofset"
                       type="number"
                       value={printOffsetY}
-                      onChange={(event) => setPrintOffsetY(Number(event.target.value) || 0)}
+                      onChange={(event) => {
+                        const newValue = Number((event.target as HTMLInputElement).value) || 0;
+                        startTransition(() => {
+                          setPrintOffsetY(newValue);
+                        });
+                      }}
                       onBlur={() => setPrintOffsetY((prev) => Math.max(0, prev || 0))}
-                      onWheel={handleNumberFieldWheel}
                       onKeyDown={(event) => handleNumberFieldArrow(event, printOffsetY, setPrintOffsetY, 0)}
                     />
                   </Stack>
@@ -1457,7 +1532,12 @@ function useDebounce<T>(value: T, delay: number): T {
                     minRows={10}
                     maxRows={18}
                     value={editedEpl}
-                    onChange={(e) => setEditedEpl(e.target.value)}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      startTransition(() => {
+                        setEditedEpl(newValue);
+                      });
+                    }}
                     placeholder="EPL ciktisi buraya gelecek..."
                     sx={{
                       "& .MuiInputBase-input": {
@@ -1467,7 +1547,7 @@ function useDebounce<T>(value: T, delay: number): T {
                       },
                     }}
                   />
-                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                  <Alert severity="info" sx={{ borderRadius: 0 }}>
                     EPL ciktisi taslaktan otomatik uretilir. Elle degisiklik yapabilirsiniz; taslak/veri degistiginde otomatik guncellenir.
                   </Alert>
                 </Stack>
@@ -1497,8 +1577,11 @@ function useDebounce<T>(value: T, delay: number): T {
                     <TextField
                       select
                       label="Eleman Sec"
-                      value={selectedElementId ?? ""}
-                      onChange={(event) => setSelectedElementId(event.target.value)}
+                      value={draft.elements.find(el => el.id === selectedElementId) ? selectedElementId : ""}
+                      onChange={(event) => {
+                        const newId = event.target.value;
+                        setSelectedElementId(newId || null);
+                      }}
                     >
                       {draft.elements.map((element, index) => (
                         <MenuItem key={element.id} value={element.id}>
@@ -1520,12 +1603,16 @@ function useDebounce<T>(value: T, delay: number): T {
                           label="X"
                           type="number"
                           value={selectedElement.x}
-                          onChange={(event) => updateElement(selectedElement.id, { x: Number(event.target.value) || 0 })}
-                          onBlur={() => updateElement(selectedElement.id, { x: Math.max(0, selectedElement.x || 0) })}
-                          onWheel={handleNumberFieldWheel}
-                          onKeyDown={(event) =>
-                            handleNumberFieldArrow(event, selectedElement.x, (next) => updateElement(selectedElement.id, { x: next }), 0)
-                          }
+                          onChange={(event) => updateElement(selectedElement.id, { x: Number((event.target as HTMLInputElement).value) || 0 })}
+                          onBlur={(event) => updateElement(selectedElement.id, { x: Math.max(0, Number((event.target as HTMLInputElement).value) || 0) })}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              updateElement(selectedElement.id, { x: Math.max(0, Number((event.target as HTMLInputElement).value) || 0) });
+                              (event.target as HTMLInputElement).blur();
+                            } else {
+                              handleNumberFieldArrow(event, selectedElement.x, (next) => updateElement(selectedElement.id, { x: next }), 0);
+                            }
+                          }}
                         />
                       </Grid>
                       <Grid size={{ xs: 6 }}>
@@ -1533,19 +1620,23 @@ function useDebounce<T>(value: T, delay: number): T {
                           label="Y"
                           type="number"
                           value={selectedElement.y}
-                          onChange={(event) => updateElement(selectedElement.id, { y: Number(event.target.value) || 0 })}
-                          onBlur={() => updateElement(selectedElement.id, { y: Math.max(0, selectedElement.y || 0) })}
-                          onWheel={handleNumberFieldWheel}
-                          onKeyDown={(event) =>
-                            handleNumberFieldArrow(event, selectedElement.y, (next) => updateElement(selectedElement.id, { y: next }), 0)
-                          }
+                          onChange={(event) => updateElement(selectedElement.id, { y: Number((event.target as HTMLInputElement).value) || 0 })}
+                          onBlur={(event) => updateElement(selectedElement.id, { y: Math.max(0, Number((event.target as HTMLInputElement).value) || 0) })}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              updateElement(selectedElement.id, { y: Math.max(0, Number((event.target as HTMLInputElement).value) || 0) });
+                              (event.target as HTMLInputElement).blur();
+                            } else {
+                              handleNumberFieldArrow(event, selectedElement.y, (next) => updateElement(selectedElement.id, { y: next }), 0);
+                            }
+                          }}
                         />
                       </Grid>
                     </Grid>
 
                     {selectedElement.type === "text" ? (
                       <>
-                        <Alert severity="info" sx={{ borderRadius: 2 }}>
+                        <Alert severity="info" sx={{ borderRadius: 0 }}>
                           Binding secilirse veri alanindan okur. Veri bos gelirse alttaki varsayilan metni kullanir.
                         </Alert>
                         <TextField
@@ -1574,16 +1665,15 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Wrap Width"
                               type="number"
                               value={selectedElement.wrapWidth}
-                              onChange={(event) => updateElement(selectedElement.id, { wrapWidth: Number(event.target.value) || 0 })}
-                              onBlur={() =>
-                                updateElement(selectedElement.id, {
-                                  wrapWidth: Math.max(56, selectedElement.wrapWidth || 0),
-                                })
-                              }
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.wrapWidth, (next) => updateElement(selectedElement.id, { wrapWidth: next }), 56)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { wrapWidth: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={() => updateElement(selectedElement.id, { wrapWidth: Math.max(56, selectedElement.wrapWidth || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.wrapWidth, (next) => updateElement(selectedElement.id, { wrapWidth: next }), 56);
+                                }
+                              }}
                             />
                           </Grid>
                           <Grid size={{ xs: 6 }}>
@@ -1591,20 +1681,19 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Max Lines"
                               type="number"
                               value={selectedElement.maxLines}
-                              onChange={(event) => updateElement(selectedElement.id, { maxLines: Number(event.target.value) || 0 })}
-                              onBlur={() =>
-                                updateElement(selectedElement.id, {
-                                  maxLines: Math.max(1, selectedElement.maxLines || 0),
-                                })
-                              }
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.maxLines, (next) => updateElement(selectedElement.id, { maxLines: next }), 1)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { maxLines: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={() => updateElement(selectedElement.id, { maxLines: Math.max(1, selectedElement.maxLines || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.maxLines, (next) => updateElement(selectedElement.id, { maxLines: next }), 1);
+                                }
+                              }}
                             />
                           </Grid>
                         </Grid>
-                        <TextField select label="Font" value={selectedElement.font} onChange={(event) => updateElement(selectedElement.id, { font: Number(event.target.value) as TextElement["font"] })}>
+                        <TextField select label="Font" value={selectedElement.font} onChange={(event) => updateElement(selectedElement.id, { font: Number((event.target as HTMLInputElement).value) as TextElement["font"] })}>
                           <MenuItem value={1}>Font 1</MenuItem>
                           <MenuItem value={2}>Font 2</MenuItem>
                           <MenuItem value={3}>Font 3</MenuItem>
@@ -1649,12 +1738,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label={selectedElement.orientation === "horizontal" ? "Uzunluk" : "Kalınlık"}
                               type="number"
                               value={selectedElement.width}
-                              onChange={(event) => updateElement(selectedElement.id, { width: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { width: Math.max(1, selectedElement.width || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.width, (next) => updateElement(selectedElement.id, { width: next }), 1)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { width: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { width: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { width: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.width, (next) => updateElement(selectedElement.id, { width: next }), 1);
+                                }
+                              }}
                             />
                           </Grid>
                           <Grid size={{ xs: 6 }}>
@@ -1662,12 +1755,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label={selectedElement.orientation === "vertical" ? "Uzunluk" : "Kalınlık"}
                               type="number"
                               value={selectedElement.height}
-                              onChange={(event) => updateElement(selectedElement.id, { height: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { height: Math.max(1, selectedElement.height || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 1)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { height: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { height: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { height: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 1);
+                                }
+                              }}
                             />
                           </Grid>
                         </Grid>
@@ -1682,12 +1779,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Genislik"
                               type="number"
                               value={selectedElement.width}
-                              onChange={(event) => updateElement(selectedElement.id, { width: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { width: Math.max(4, selectedElement.width || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.width, (next) => updateElement(selectedElement.id, { width: next }), 4)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { width: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { width: Math.max(4, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { width: Math.max(4, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.width, (next) => updateElement(selectedElement.id, { width: next }), 4);
+                                }
+                              }}
                             />
                           </Grid>
                           <Grid size={{ xs: 6 }}>
@@ -1695,12 +1796,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Yukseklik"
                               type="number"
                               value={selectedElement.height}
-                              onChange={(event) => updateElement(selectedElement.id, { height: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { height: Math.max(4, selectedElement.height || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 4)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { height: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { height: Math.max(4, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { height: Math.max(4, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 4);
+                                }
+                              }}
                             />
                           </Grid>
                         </Grid>
@@ -1708,19 +1813,23 @@ function useDebounce<T>(value: T, delay: number): T {
                           label="Cizgi Kalinligi"
                           type="number"
                           value={selectedElement.thickness}
-                          onChange={(event) => updateElement(selectedElement.id, { thickness: Number(event.target.value) || 0 })}
-                          onBlur={() => updateElement(selectedElement.id, { thickness: Math.max(1, selectedElement.thickness || 0) })}
-                          onWheel={handleNumberFieldWheel}
-                          onKeyDown={(event) =>
-                            handleNumberFieldArrow(event, selectedElement.thickness, (next) => updateElement(selectedElement.id, { thickness: next }), 1)
-                          }
+                          onChange={(event) => updateElement(selectedElement.id, { thickness: Number((event.target as HTMLInputElement).value) || 0 })}
+                          onBlur={(event) => updateElement(selectedElement.id, { thickness: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) })}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              updateElement(selectedElement.id, { thickness: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) });
+                              (event.target as HTMLInputElement).blur();
+                            } else {
+                              handleNumberFieldArrow(event, selectedElement.thickness, (next) => updateElement(selectedElement.id, { thickness: next }), 1);
+                            }
+                          }}
                         />
                       </>
                     ) : null}
 
                     {selectedElement.type === "barcode" ? (
                       <>
-                        <Alert severity="info" sx={{ borderRadius: 2 }}>
+                        <Alert severity="info" sx={{ borderRadius: 0 }}>
                           Binding secilirse barkod verisi JSON'dan gelir. Veri bossa varsayilan barkod metni kullanilir.
                         </Alert>
                         <TextField
@@ -1755,12 +1864,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Narrow"
                               type="number"
                               value={selectedElement.narrow}
-                              onChange={(event) => updateElement(selectedElement.id, { narrow: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { narrow: Math.max(1, selectedElement.narrow || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.narrow, (next) => updateElement(selectedElement.id, { narrow: next }), 1)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { narrow: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { narrow: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { narrow: Math.max(1, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.narrow, (next) => updateElement(selectedElement.id, { narrow: next }), 1);
+                                }
+                              }}
                             />
                           </Grid>
                           <Grid size={{ xs: 4 }}>
@@ -1768,12 +1881,16 @@ function useDebounce<T>(value: T, delay: number): T {
                               label="Wide"
                               type="number"
                               value={selectedElement.wide}
-                              onChange={(event) => updateElement(selectedElement.id, { wide: Number(event.target.value) || 0 })}
-                              onBlur={() => updateElement(selectedElement.id, { wide: Math.max(2, selectedElement.wide || 0) })}
-                              onWheel={handleNumberFieldWheel}
-                              onKeyDown={(event) =>
-                                handleNumberFieldArrow(event, selectedElement.wide, (next) => updateElement(selectedElement.id, { wide: next }), 2)
-                              }
+                              onChange={(event) => updateElement(selectedElement.id, { wide: Number((event.target as HTMLInputElement).value) || 0 })}
+                              onBlur={(event) => updateElement(selectedElement.id, { wide: Math.max(2, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { wide: Math.max(2, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.wide, (next) => updateElement(selectedElement.id, { wide: next }), 2);
+                                }
+                              }}
                             />
                           </Grid>
                         </Grid>
@@ -1781,12 +1898,16 @@ function useDebounce<T>(value: T, delay: number): T {
                           label="Yukseklik"
                           type="number"
                           value={selectedElement.height}
-                          onChange={(event) => updateElement(selectedElement.id, { height: Number(event.target.value) || 0 })}
-                          onBlur={() => updateElement(selectedElement.id, { height: Math.max(40, selectedElement.height || 0) })}
-                          onWheel={handleNumberFieldWheel}
-                          onKeyDown={(event) =>
-                            handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 40)
-                          }
+                          onChange={(event) => updateElement(selectedElement.id, { height: Number((event.target as HTMLInputElement).value) || 0 })}
+                          onBlur={(event) => updateElement(selectedElement.id, { height: Math.max(40, Number((event.target as HTMLInputElement).value) || 0) })}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  updateElement(selectedElement.id, { height: Math.max(40, Number((event.target as HTMLInputElement).value) || 0) });
+                                  (event.target as HTMLInputElement).blur();
+                                } else {
+                                  handleNumberFieldArrow(event, selectedElement.height, (next) => updateElement(selectedElement.id, { height: next }), 40);
+                                }
+                              }}
                         />
                         <FormControlLabel control={<Switch checked={selectedElement.humanReadable} onChange={(event) => updateElement(selectedElement.id, { humanReadable: event.target.checked })} />} label="Alt Metni Goster" />
                       </>
