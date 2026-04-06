@@ -374,9 +374,75 @@ function resolveBinding(record: DataRecord | undefined, binding: string, fallbac
   return String(value);
 }
 
+// Code 39 character patterns: each pattern represents 5 bars and 4 spaces (9 elements total)
+// 1 = narrow, 2 = wide. Pattern order: bar, space, bar, space, bar, space, bar, space, bar
+const CODE39_PATTERNS: Record<string, number[]> = {
+  "0": [1,1,2,1,2,2,1,1,1], "1": [2,1,1,1,2,1,1,2,1], "2": [1,2,1,1,2,1,1,2,1],
+  "3": [2,2,1,1,2,1,1,1,1], "4": [1,1,2,1,2,1,2,1,1], "5": [2,1,2,1,2,1,2,1,1],
+  "6": [1,2,2,1,2,1,2,1,1], "7": [1,1,1,2,2,1,2,1,1], "8": [2,1,1,2,2,1,2,1,1],
+  "9": [1,2,1,2,2,1,2,1,1], "A": [2,1,1,1,1,2,1,2,1], "B": [1,2,1,1,1,2,1,2,1],
+  "C": [2,2,1,1,1,2,1,1,1], "D": [1,1,2,1,1,2,1,2,1], "E": [2,1,2,1,1,2,1,2,1],
+  "F": [1,2,2,1,1,2,1,2,1], "G": [1,1,1,2,1,2,1,2,1], "H": [2,1,1,2,1,2,1,2,1],
+  "I": [1,2,1,2,1,2,1,2,1], "J": [1,1,2,2,1,2,1,2,1], "K": [2,1,1,1,1,1,2,2,1],
+  "L": [1,2,1,1,1,1,2,2,1], "M": [2,2,1,1,1,1,2,1,1], "N": [1,1,2,1,1,1,2,2,1],
+  "O": [2,1,2,1,1,1,2,2,1], "P": [1,2,2,1,1,1,2,2,1], "Q": [1,1,1,2,1,1,2,2,1],
+  "R": [2,1,1,2,1,1,2,2,1], "S": [1,2,1,2,1,1,2,2,1], "T": [1,1,2,2,1,1,2,2,1],
+  "U": [2,1,1,1,1,2,2,1,1], "V": [1,2,1,1,1,2,2,1,1], "W": [2,2,1,1,1,2,2,1,1],
+  "X": [1,1,2,1,1,2,2,1,1], "Y": [2,1,2,1,1,2,2,1,1], "Z": [1,2,2,1,1,2,2,1,1],
+  "-": [1,1,1,2,2,2,1,1,1], ".": [2,1,1,2,2,2,1,1,1], " ": [1,2,1,2,2,2,1,1,1],
+  "$": [1,1,2,2,1,2,1,2,1], "/": [1,1,2,2,1,1,2,1,2], "+": [1,1,2,2,1,1,2,2,1],
+  "%": [1,1,2,1,2,1,2,1,2], "*": [1,1,2,1,2,2,1,1,2], // Start/Stop character
+};
+
+function generateCode39Bars(text: string, narrow: number, wide: number): Array<{x: number; width: number}> {
+  const bars: Array<{x: number; width: number}> = [];
+  const charWidth = (narrow * 3 + wide * 6) * 2; // Approximate width per character
+  let xPos = 8; // Start padding
+
+  // Add start character
+  const startPattern = CODE39_PATTERNS["*"] || [1,1,2,1,2,2,1,1,2];
+  xPos = addPatternBars(bars, startPattern, xPos, narrow, wide);
+  xPos += narrow; // Inter-character gap
+
+  // Add each character
+  for (const char of text.toUpperCase()) {
+    const pattern = CODE39_PATTERNS[char];
+    if (!pattern) continue;
+    xPos = addPatternBars(bars, pattern, xPos, narrow, wide);
+    xPos += narrow; // Inter-character gap
+  }
+
+  // Add stop character
+  xPos = addPatternBars(bars, startPattern, xPos, narrow, wide);
+
+  return bars;
+}
+
+function addPatternBars(
+  bars: Array<{x: number; width: number}>,
+  pattern: number[],
+  xPos: number,
+  narrow: number,
+  wide: number
+): number {
+  for (let i = 0; i < pattern.length; i++) {
+    if (i % 2 === 0) {
+      // Bar (odd indices are bars)
+      bars.push({
+        x: xPos,
+        width: pattern[i] === 1 ? narrow * 2 : wide * 2, // Scale for visibility
+      });
+    }
+    xPos += (pattern[i] === 1 ? narrow : wide) * 2; // Scale both bars and spaces
+  }
+  return xPos;
+}
+
 function barcodePreviewWidth(value: string, narrow: number, wide: number) {
-  const unit = Math.max(2, narrow + wide);
-  return Math.min(340, Math.max(120, value.length * unit * 4));
+  // More accurate width calculation based on Code 39 specification
+  const barCount = value.length * 5 + 10; // 5 bars per char + start/stop
+  const avgBarWidth = (narrow + wide) / 2;
+  return Math.min(340, Math.max(120, barCount * avgBarWidth * 2.5));
 }
 
 function estimateTextWidth(text: string, fontSize: number) {
@@ -777,7 +843,7 @@ function ElementPreview({
               <Rnd
                 key={command.id}
                 size={{ width: command.width + 8, height: command.height + 8 }}
-                position={{ x: Math.max(0, anchorLeft - 4), y: Math.max(0, command.y - command.fontSize) }}
+                position={{ x: Math.max(0, anchorLeft - 4), y: Math.max(0, command.y) }}
                 bounds="parent"
                 enableResizing={false}
                 dragGrid={[1, 1]}
@@ -789,7 +855,7 @@ function ElementPreview({
                       : command.align === "center"
                         ? data.x + Math.round(command.width / 2) + 4
                         : data.x + 4;
-                  onMove(command.id, nextX, data.y + command.fontSize);
+                  onMove(command.id, nextX, data.y);
                 }}
                 style={{ zIndex: selected ? 4 : 2 }}
               >
@@ -879,10 +945,7 @@ function ElementPreview({
             );
           }
 
-          const bars = command.text.split("").map((char, index) => ({
-            x: index * 5,
-            width: char.charCodeAt(0) % 2 === 0 ? 2 : 4,
-          }));
+          const bars = generateCode39Bars(command.text, 2, 4);
           return (
             <Rnd
               key={command.id}
@@ -912,7 +975,7 @@ function ElementPreview({
                     key={`${command.id}-${index}`}
                     sx={{
                       position: "absolute",
-                      left: 8 + bar.x,
+                      left: bar.x,
                       top: 8,
                       width: bar.width,
                       height: command.height - (command.humanReadable ? 28 : 16),
