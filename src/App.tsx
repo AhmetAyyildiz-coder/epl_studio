@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Alert,
   Box,
@@ -86,6 +86,9 @@ export default function App() {
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [remoteLayoutFilters, setRemoteLayoutFilters] = useState<RemoteLayoutFilters>({ shortCode: "", name: "" });
   const debouncedJsonText = useDebounce(dataSource.jsonText, 500);
+  const renderDraft = useMemo(() => ({ ...draft, elements: draft.elements }), [draft.elements]);
+  const deferredEplDraft = useDeferredValue(renderDraft);
+  const deferredSelectedRecordIndexes = useDeferredValue(selectedRecordIndexes);
 
   const setMessageOptimized = useCallback((nextMessage: string) => {
     setMessage(nextMessage);
@@ -142,19 +145,20 @@ export default function App() {
   }, []);
 
   const activeRecord = records[selectedRecordIndex];
-  const previewCommands = useMemo(() => buildPreviewCommands(draft, activeRecord), [draft, activeRecord]);
+  const deferredActiveRecord = useDeferredValue(activeRecord);
+  const previewCommands = useMemo(() => buildPreviewCommands(renderDraft, deferredActiveRecord), [renderDraft, deferredActiveRecord]);
   const selectedElement = useMemo(
     () => draft.elements.find((element) => element.id === selectedElementId) ?? null,
     [draft.elements, selectedElementId],
   );
   const datasetKeys = useMemo(() => Array.from(new Set(records.flatMap((record) => Object.keys(record)))), [records]);
   const selectedEpl = useMemo(() => {
-    if (!selectedRecordIndexes.length) {
+    if (!deferredSelectedRecordIndexes.length) {
       return "";
     }
 
-    return selectedRecordIndexes.map((index) => buildEpl(draft, records[index], 0, 0)).join("");
-  }, [draft, records, selectedRecordIndexes]);
+    return deferredSelectedRecordIndexes.map((index) => buildEpl(deferredEplDraft, records[index], 0, 0)).join("");
+  }, [deferredEplDraft, records, deferredSelectedRecordIndexes]);
   const [editedEpl, setEditedEpl] = useState(selectedEpl);
 
   useEffect(() => {
@@ -569,9 +573,7 @@ export default function App() {
                     value={dataSource.jsonText}
                     onChange={(event) => {
                       const nextValue = event.target.value;
-                      startTransition(() => {
-                        setDataSource((prev) => ({ ...prev, jsonText: nextValue }));
-                      });
+                      setDataSource((prev) => ({ ...prev, jsonText: nextValue }));
                     }}
                   />
                   <Button variant="contained" onClick={applyJsonData}>JSON Uygula</Button>
@@ -590,9 +592,7 @@ export default function App() {
                       value={draft.name}
                       onChange={(event) => {
                         const nextName = event.target.value;
-                        startTransition(() => {
-                          updateDraftName(nextName);
-                        });
+                        updateDraftName(nextName);
                       }}
                       sx={{ minWidth: 240, flex: 1 }}
                     />
@@ -601,9 +601,7 @@ export default function App() {
                       value={draft.shortCode}
                       onChange={(event) => {
                         const nextShortCode = event.target.value.toUpperCase();
-                        startTransition(() => {
-                          updateDraftShortCode(nextShortCode);
-                        });
+                        updateDraftShortCode(nextShortCode);
                       }}
                       sx={{ minWidth: 180 }}
                     />
@@ -632,9 +630,7 @@ export default function App() {
                       value={printOffsetX}
                       onChange={(event) => {
                         const nextValue = Number((event.target as HTMLInputElement).value) || 0;
-                        startTransition(() => {
-                          setPrintOffsetX(nextValue);
-                        });
+                        setPrintOffsetX(nextValue);
                       }}
                       onBlur={() => setPrintOffsetX((prev) => Math.max(0, prev || 0))}
                       onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetX, setPrintOffsetX, 0)}
@@ -646,9 +642,7 @@ export default function App() {
                       value={printOffsetY}
                       onChange={(event) => {
                         const nextValue = Number((event.target as HTMLInputElement).value) || 0;
-                        startTransition(() => {
-                          setPrintOffsetY(nextValue);
-                        });
+                        setPrintOffsetY(nextValue);
                       }}
                       onBlur={() => setPrintOffsetY((prev) => Math.max(0, prev || 0))}
                       onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetY, setPrintOffsetY, 0)}
@@ -682,9 +676,7 @@ export default function App() {
                     value={editedEpl}
                     onChange={(event) => {
                       const nextValue = event.target.value;
-                      startTransition(() => {
-                        setEditedEpl(nextValue);
-                      });
+                      setEditedEpl(nextValue);
                     }}
                     placeholder="EPL ciktisi buraya gelecek..."
                     sx={{

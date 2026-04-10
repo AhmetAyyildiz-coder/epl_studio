@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Grid, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import type { CanvasElement, NumberFieldArrowHandler, UpdateElementFn } from "../types";
 import { formatElementOptionLabel } from "../utils";
@@ -6,7 +7,7 @@ import { BlackBoxElementEditor } from "./editors/BlackBoxElementEditor";
 import { BoxElementEditor } from "./editors/BoxElementEditor";
 import { LineElementEditor } from "./editors/LineElementEditor";
 import { TextElementEditor } from "./editors/TextElementEditor";
-import { NumberField } from "./editors/shared";
+import { BufferedTextField, NumberField } from "./editors/shared";
 
 type ElementPropertiesPanelProps = {
   elements: CanvasElement[];
@@ -18,7 +19,7 @@ type ElementPropertiesPanelProps = {
   handleNumberFieldArrow: NumberFieldArrowHandler;
 };
 
-export function ElementPropertiesPanel({
+export const ElementPropertiesPanel = memo(function ElementPropertiesPanel({
   elements,
   selectedElement,
   selectedElementId,
@@ -47,11 +48,12 @@ export function ElementPropertiesPanel({
 
           {selectedElement ? (
             <>
-              <TextField
+              <BufferedTextField
+                key={`${selectedElement.id}-label`}
                 label="Eleman Adi"
                 value={selectedElement.label}
                 helperText="Bu ad sadece editor icinde gorunur."
-                onChange={(event) => updateElement(selectedElement.id, { label: event.target.value })}
+                onCommit={(next) => updateElement(selectedElement.id, { label: next })}
               />
               <Grid container spacing={1.5}>
                 <Grid size={{ xs: 6 }}>
@@ -126,4 +128,4 @@ export function ElementPropertiesPanel({
       )}
     </Paper>
   );
-}
+});

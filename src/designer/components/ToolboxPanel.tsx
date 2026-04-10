@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button, Paper, Stack, Typography } from "@mui/material";
 
 type ToolboxPanelProps = {
@@ -10,7 +11,7 @@ type ToolboxPanelProps = {
   onClearAll: () => void;
 };
 
-export function ToolboxPanel({
+export const ToolboxPanel = memo(function ToolboxPanel({
   onAddText,
   onAddBlackBox,
   onAddLine,
@@ -33,4 +34,4 @@ export function ToolboxPanel({
       </Stack>
     </Paper>
   );
-}
+});

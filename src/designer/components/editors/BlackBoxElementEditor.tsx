@@ -1,6 +1,6 @@
 import { Alert, MenuItem, TextField } from "@mui/material";
 import type { BlackBoxElement, NumberFieldArrowHandler, UpdateElementFn } from "../../types";
-import { BindingField, NumberField, TwoColumnFields } from "./shared";
+import { BindingField, BufferedTextField, NumberField, TwoColumnFields } from "./shared";
 
 type BlackBoxElementEditorProps = {
   element: BlackBoxElement;
@@ -26,11 +26,12 @@ export function BlackBoxElementEditor({
         helperText="Icerigi JSON alanindan almak istersen sec."
         onChange={(value) => updateElement(element.id, { binding: value })}
       />
-      <TextField
+      <BufferedTextField
+        key={`${element.id}-blackbox-text`}
         label="Kutu Metni"
         value={element.staticText}
         helperText={element.binding ? "Secilen binding bos donerse bu metin kullanilir." : "Binding yoksa dogrudan bu metin basilir."}
-        onChange={(event) => updateElement(element.id, { staticText: event.target.value })}
+        onCommit={(next) => updateElement(element.id, { staticText: next })}
       />
       <TextField
         select

@@ -1,6 +1,6 @@
 import { Alert, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
 import type { BarcodeElement, NumberFieldArrowHandler, UpdateElementFn } from "../../types";
-import { BindingField, NumberField, TwoColumnFields } from "./shared";
+import { BindingField, BufferedTextField, NumberField, TwoColumnFields } from "./shared";
 
 type BarcodeElementEditorProps = {
   element: BarcodeElement;
@@ -26,11 +26,12 @@ export function BarcodeElementEditor({
         helperText="Barkod icerigini hangi alandan alacagini sec."
         onChange={(value) => updateElement(element.id, { binding: value })}
       />
-      <TextField
+      <BufferedTextField
+        key={`${element.id}-barcode-text`}
         label="Varsayilan Barkod Metni"
         value={element.staticText}
         helperText={element.binding ? "Secilen binding bos donerse bu deger kullanilir." : "Binding yoksa dogrudan bu deger kullanilir."}
-        onChange={(event) => updateElement(element.id, { staticText: event.target.value })}
+        onCommit={(next) => updateElement(element.id, { staticText: next })}
       />
       <TwoColumnFields
         left={

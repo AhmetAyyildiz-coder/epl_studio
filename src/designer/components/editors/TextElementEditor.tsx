@@ -1,6 +1,6 @@
 import { Alert, FormControlLabel, MenuItem, Switch, TextField } from "@mui/material";
 import type { TextElement, UpdateElementFn, NumberFieldArrowHandler } from "../../types";
-import { BindingField, NumberField, TwoColumnFields } from "./shared";
+import { BindingField, BufferedTextField, NumberField, TwoColumnFields } from "./shared";
 
 type TextElementEditorProps = {
   element: TextElement;
@@ -26,11 +26,12 @@ export function TextElementEditor({
         helperText="JSON icindeki alanlardan birini sec."
         onChange={(value) => updateElement(element.id, { binding: value })}
       />
-      <TextField
+      <BufferedTextField
+        key={`${element.id}-static-text`}
         label="Varsayilan Metin"
         value={element.staticText}
         helperText={element.binding ? "Secilen binding bos donerse bu metin basilir." : "Binding yoksa dogrudan bu metin basilir."}
-        onChange={(event) => updateElement(element.id, { staticText: event.target.value })}
+        onCommit={(next) => updateElement(element.id, { staticText: next })}
       />
       <TwoColumnFields
         left={
