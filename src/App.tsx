@@ -247,6 +247,35 @@ function textElement(
   };
 }
 
+function siyahKutuElement(x: number, y: number): TextElement {
+  return {
+    id: uid(),
+    type: "text",
+    label: "Siyah Kutu",
+    x,
+    y,
+    binding: "",
+    staticText: "Siyah Kutu",
+    font: 2,
+    reverse: true,
+    align: "center",
+    wrapWidth: 220,
+    maxLines: 2,
+  };
+}
+
+function getNextElementPosition(elements: CanvasElement[]) {
+  const baseX = 30;
+  let baseY = 40;
+
+  if (elements.length > 0) {
+    const maxBottom = Math.max(...elements.map((element) => getElementBottom(element)));
+    baseY = Math.min(LABEL_HEIGHT_DOTS - 40, maxBottom + 12);
+  }
+
+  return { baseX, baseY };
+}
+
 function defaultElements(): CanvasElement[] {
   return [
     textElement("Musteri", "musteri", 10, 24, 2),
@@ -890,7 +919,7 @@ const ElementPreview = memo(function ElementPreview({
                           ? "center"
                           : "flex-start",
                     border: `1px dashed ${stroke}`,
-                    bgcolor: fill,
+                    bgcolor: command.reverse ? "#111" : fill,
                     borderRadius: 0,
                     cursor: "grab",
                     userSelect: "none",
@@ -1174,13 +1203,7 @@ export default function App() {
   const addElement = useCallback((type: ElementType) => {
     startTransition(() => {
       setDraft((prev) => {
-        const baseX = 30;
-        // Optimize position calculation - cache result to avoid repeated calculations
-        let baseY = 40;
-        if (prev.elements.length > 0) {
-          const maxBottom = Math.max(...prev.elements.map((element) => getElementBottom(element)));
-          baseY = Math.min(LABEL_HEIGHT_DOTS - 40, maxBottom + 12);
-        }
+        const { baseX, baseY } = getNextElementPosition(prev.elements);
 
         let element: CanvasElement;
         if (type === "text") {
@@ -1218,6 +1241,19 @@ export default function App() {
         // Update selected element immediately to avoid MUI Select warning
         setSelectedElementId(element.id);
         setMessageOptimized(`${type} elemani eklendi.`);
+        return { ...prev, elements: [...prev.elements, element] };
+      });
+    });
+  }, []);
+
+  const addSiyahKutuElement = useCallback(() => {
+    startTransition(() => {
+      setDraft((prev) => {
+        const { baseX, baseY } = getNextElementPosition(prev.elements);
+        const element = siyahKutuElement(baseX + 110, baseY);
+
+        setSelectedElementId(element.id);
+        setMessageOptimized("Siyah kutu elemani eklendi.");
         return { ...prev, elements: [...prev.elements, element] };
       });
     });
@@ -1562,6 +1598,7 @@ function useDebounce<T>(value: T, delay: number): T {
                 <Typography variant="h6" mb={1.5}>Toolbox</Typography>
                 <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
                   <Button variant="outlined" onClick={() => addElement("text")}>Text</Button>
+                  <Button variant="outlined" onClick={addSiyahKutuElement}>Siyah Kutu</Button>
                   <Button variant="outlined" onClick={() => addElement("line")}>Cizgi</Button>
                   <Button variant="outlined" onClick={() => addElement("box")}>Kutu</Button>
                   <Button variant="outlined" onClick={() => addElement("barcode")}>Barcode</Button>
