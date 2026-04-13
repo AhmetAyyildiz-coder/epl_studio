@@ -18,7 +18,7 @@ export function BlackBoxElementEditor({
   return (
     <>
       <Alert severity="info" sx={{ borderRadius: 0 }}>
-        Siyah Kutu tek satirlik, beyaz yazi siyah zemin presetidir. Max line, hizalama ve ters baski gibi text ayarlari burada gizlenir.
+        Siyah Kutu beyaz yazi siyah zemin olarak basilir. 0 degeri metne gore otomatik boyut demektir.
       </Alert>
       <BindingField
         value={element.binding}
@@ -47,20 +47,22 @@ export function BlackBoxElementEditor({
       <TwoColumnFields
         left={
           <NumberField
-            label="Yatay Padding"
-            value={element.paddingX}
-            min={4}
+            label="Genislik"
+            value={element.width}
+            min={0}
+            helperText="0 = otomatik"
             handleNumberFieldArrow={handleNumberFieldArrow}
-            onChange={(next) => updateElement(element.id, { paddingX: next })}
+            onChange={(next) => updateElement(element.id, { width: next })}
           />
         }
         right={
           <NumberField
-            label="Dikey Padding"
-            value={element.paddingY}
-            min={2}
+            label="Yukseklik"
+            value={element.height}
+            min={0}
+            helperText="0 = otomatik"
             handleNumberFieldArrow={handleNumberFieldArrow}
-            onChange={(next) => updateElement(element.id, { paddingY: next })}
+            onChange={(next) => updateElement(element.id, { height: next })}
           />
         }
       />

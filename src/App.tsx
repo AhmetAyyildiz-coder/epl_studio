@@ -10,6 +10,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -17,6 +18,7 @@ import {
 } from "@mui/material";
 import {
   DEFAULT_DPI,
+  DEFAULT_PREVIEW_ZOOM,
   DEFAULT_PRINT_OFFSET_X,
   DEFAULT_PRINT_OFFSET_Y,
   FIELD_LABELS,
@@ -81,6 +83,7 @@ export default function App() {
   const [selectedElementId, setSelectedElementId] = useState<string | null>(() => initialDesignerState.draft.elements[0]?.id ?? null);
   const [printOffsetX, setPrintOffsetX] = useState(DEFAULT_PRINT_OFFSET_X);
   const [printOffsetY, setPrintOffsetY] = useState(DEFAULT_PRINT_OFFSET_Y);
+  const [previewZoom, setPreviewZoom] = useState(DEFAULT_PREVIEW_ZOOM);
   const [message, setMessage] = useState("Veri kaynagi yukleyin, canvas ustunde elemanlari tasiyin ve secili kayitlari yazdirin.");
   const [isLoadingRemoteLayouts, setIsLoadingRemoteLayouts] = useState(false);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
@@ -451,7 +454,7 @@ export default function App() {
   const applyEditedEplToPreview = useCallback(() => {
     const parsed = parseEplToElements(editedEpl, printOffsetX, printOffsetY);
     if (!parsed.length) {
-      setMessageOptimized("EPL parse edilemedi. A/LO/X/B komutlarini kontrol edin.");
+      setMessageOptimized("EPL parse edilemedi. A/LE/LO/X/B komutlarini kontrol edin.");
       return;
     }
 
@@ -472,7 +475,7 @@ export default function App() {
   }, []);
 
   const moveElement = useCallback((id: string, x: number, y: number) => {
-    updateElement(id, { x, y });
+    updateElement(id, { x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)) });
   }, [updateElement]);
 
   return (
@@ -624,15 +627,29 @@ export default function App() {
                   </Stack>
                   <Stack direction="row" spacing={1}>
                     <TextField
+                      select
+                      size="small"
+                      label="Onizleme Zoom"
+                      value={String(previewZoom)}
+                      onChange={(event) => setPreviewZoom(Number(event.target.value) || DEFAULT_PREVIEW_ZOOM)}
+                      sx={{ minWidth: 140 }}
+                    >
+                      <MenuItem value="1">100%</MenuItem>
+                      <MenuItem value="1.25">125%</MenuItem>
+                      <MenuItem value="1.5">150%</MenuItem>
+                      <MenuItem value="1.75">175%</MenuItem>
+                      <MenuItem value="2">200%</MenuItem>
+                    </TextField>
+                    <TextField
                       size="small"
                       label="X Ofset"
                       type="number"
                       value={printOffsetX}
                       onChange={(event) => {
-                        const nextValue = Number((event.target as HTMLInputElement).value) || 0;
+                        const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
                         setPrintOffsetX(nextValue);
                       }}
-                      onBlur={() => setPrintOffsetX((prev) => Math.max(0, prev || 0))}
+                      onBlur={() => setPrintOffsetX((prev) => Math.max(0, Math.round(prev || 0)))}
                       onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetX, setPrintOffsetX, 0)}
                     />
                     <TextField
@@ -641,10 +658,10 @@ export default function App() {
                       type="number"
                       value={printOffsetY}
                       onChange={(event) => {
-                        const nextValue = Number((event.target as HTMLInputElement).value) || 0;
+                        const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
                         setPrintOffsetY(nextValue);
                       }}
-                      onBlur={() => setPrintOffsetY((prev) => Math.max(0, prev || 0))}
+                      onBlur={() => setPrintOffsetY((prev) => Math.max(0, Math.round(prev || 0)))}
                       onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetY, setPrintOffsetY, 0)}
                     />
                   </Stack>
@@ -653,6 +670,7 @@ export default function App() {
                 <ElementPreview
                   commands={previewCommands}
                   selectedId={selectedElementId}
+                  zoom={previewZoom}
                   onSelect={setSelectedElementId}
                   onMove={moveElement}
                 />

@@ -1,13 +1,14 @@
 import { memo, useMemo } from "react";
 import { Box, Typography } from "@mui/material";
 import { Rnd } from "react-rnd";
-import { DOTS_PER_MM, LABEL_HEIGHT_DOTS, LABEL_WIDTH_DOTS } from "../constants";
+import { DEFAULT_PREVIEW_ZOOM, DOTS_PER_MM, LABEL_HEIGHT_DOTS, LABEL_WIDTH_DOTS, PREVIEW_SCALE } from "../constants";
 import { generateCode39Bars } from "../utils";
 import type { PreviewCommand } from "../types";
 
 type ElementPreviewProps = {
   commands: PreviewCommand[];
   selectedId: string | null;
+  zoom?: number;
   onSelect: (id: string) => void;
   onMove: (id: string, x: number, y: number) => void;
 };
@@ -15,6 +16,7 @@ type ElementPreviewProps = {
 type PreviewItemProps = {
   command: PreviewCommand;
   selected: boolean;
+  scale: number;
   onSelect: (id: string) => void;
   onMove: (id: string, x: number, y: number) => void;
 };
@@ -58,7 +60,7 @@ function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
   return false;
 }
 
-const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onMove }: PreviewItemProps) {
+const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSelect, onMove }: PreviewItemProps) {
   const stroke = selected ? "#bf360c" : "rgba(0,77,64,0.22)";
   const fill = selected ? "rgba(191,54,12,0.08)" : "rgba(0,77,64,0.04)";
   const barcodeBars = useMemo(() => (command.type === "barcode" ? generateCode39Bars(command.text, 2, 4) : []), [command]);
@@ -75,6 +77,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
       <Rnd
         size={{ width: command.width + 8, height: command.height + 8 }}
         position={{ x: Math.max(0, anchorLeft - 4), y: Math.max(0, command.y) }}
+        scale={scale}
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
@@ -127,6 +130,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
       <Rnd
         size={{ width: command.width, height: command.height }}
         position={{ x: command.x, y: command.y }}
+        scale={scale}
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
@@ -142,16 +146,19 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            px: 1,
+            px: 0.5,
+            border: `1px ${selected ? "dashed" : "solid"} ${selected ? "#bf360c" : "#111"}`,
             bgcolor: "#111",
             color: "#fff",
-            border: `1px ${selected ? "dashed" : "solid"} ${selected ? "#bf360c" : "#111"}`,
             cursor: "grab",
             userSelect: "none",
+            boxSizing: "border-box",
+            overflow: "hidden",
             fontFamily: "monospace",
             fontSize: `${command.fontSize}px`,
             lineHeight: 1,
             textAlign: "center",
+            whiteSpace: "nowrap",
           }}
         >
           {command.text}
@@ -165,6 +172,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
       <Rnd
         size={{ width: command.width, height: Math.max(8, command.height) }}
         position={{ x: command.x, y: command.y }}
+        scale={scale}
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
@@ -191,6 +199,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
       <Rnd
         size={{ width: command.width, height: command.height }}
         position={{ x: command.x, y: command.y }}
+        scale={scale}
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
@@ -216,6 +225,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
     <Rnd
       size={{ width: command.width, height: command.height }}
       position={{ x: command.x, y: command.y }}
+      scale={scale}
       bounds="parent"
       enableResizing={false}
       dragGrid={[1, 1]}
@@ -278,9 +288,12 @@ const PreviewItem = memo(function PreviewItem({ command, selected, onSelect, onM
 export const ElementPreview = memo(function ElementPreview({
   commands,
   selectedId,
+  zoom = DEFAULT_PREVIEW_ZOOM,
   onSelect,
   onMove,
 }: ElementPreviewProps) {
+  const effectiveScale = PREVIEW_SCALE * zoom;
+
   return (
     <Box
       sx={{
@@ -296,26 +309,43 @@ export const ElementPreview = memo(function ElementPreview({
       <Box
         sx={{
           position: "relative",
-          width: `${LABEL_WIDTH_DOTS}px`,
-          height: `${LABEL_HEIGHT_DOTS}px`,
+          width: `${Math.round(LABEL_WIDTH_DOTS * effectiveScale)}px`,
+          height: `${Math.round(LABEL_HEIGHT_DOTS * effectiveScale)}px`,
           borderRadius: 0,
           overflow: "hidden",
           bgcolor: "#fffdfa",
-          backgroundImage:
-            "linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)",
-          backgroundSize: `${5 * DOTS_PER_MM}px ${5 * DOTS_PER_MM}px`,
           border: "2px solid #1f2522",
         }}
       >
-        {commands.map((command) => (
-          <PreviewItem
-            key={command.id}
-            command={command}
-            selected={selectedId === command.id}
-            onSelect={onSelect}
-            onMove={onMove}
-          />
-        ))}
+        <Box
+          sx={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: `${LABEL_WIDTH_DOTS}px`,
+            height: `${LABEL_HEIGHT_DOTS}px`,
+            overflow: "hidden",
+            bgcolor: "#fffdfa",
+            backgroundImage:
+              "linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)",
+            backgroundSize: `${5 * DOTS_PER_MM}px ${5 * DOTS_PER_MM}px`,
+            transform: `scale(${effectiveScale})`,
+            transformOrigin: "top left",
+            border: "2px solid #1f2522",
+            boxSizing: "border-box",
+          }}
+        >
+          {commands.map((command) => (
+            <PreviewItem
+              key={command.id}
+              command={command}
+              selected={selectedId === command.id}
+              scale={effectiveScale}
+              onSelect={onSelect}
+              onMove={onMove}
+            />
+          ))}
+        </Box>
       </Box>
     </Box>
   );

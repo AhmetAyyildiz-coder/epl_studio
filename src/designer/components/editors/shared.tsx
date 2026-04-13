@@ -87,7 +87,7 @@ export function NumberField({
       return;
     }
 
-    const nextValue = Math.max(min, parsedValue || 0);
+    const nextValue = Math.max(min, Math.round(parsedValue || 0));
     if (nextValue === value) {
       return;
     }
@@ -103,7 +103,7 @@ export function NumberField({
 
   const commitNumberValue = () => {
     const parsedValue = Number(localValue);
-    const nextValue = Math.max(min, Number.isNaN(parsedValue) ? 0 : parsedValue || 0);
+    const nextValue = Math.max(min, Math.round(Number.isNaN(parsedValue) ? 0 : parsedValue || 0));
     setLocalValue(String(nextValue));
     onChange(nextValue);
   };
@@ -124,7 +124,7 @@ export function NumberField({
         }
 
         if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-          const currentValue = Math.max(min, Number(localValue) || 0);
+          const currentValue = Math.max(min, Math.round(Number(localValue) || 0));
           handleNumberFieldArrow(event, currentValue, (next) => {
             setLocalValue(String(next));
             onChange(next);

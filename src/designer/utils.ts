@@ -37,6 +37,41 @@ const trMap: Record<string, string> = {
 
 const trRegex = new RegExp(`[${Object.keys(trMap).join("")}]`, "g");
 
+const BLACK_BOX_FONT_HEIGHT_MAP: Record<TextFont, number> = {
+  1: 20,
+  2: 28,
+  3: 36,
+  4: 44,
+};
+
+const BLACK_BOX_FONT_WIDTH_MAP: Record<TextFont, number> = {
+  1: 12,
+  2: 16,
+  3: 20,
+  4: 24,
+};
+
+const BLACK_BOX_AUTO_HORIZONTAL_PADDING = 10;
+const BLACK_BOX_AUTO_VERTICAL_PADDING = 4;
+
+function toNonNegativeInt(value: unknown, fallback = 0) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.round(numericValue));
+}
+
+function toInt(value: unknown, fallback = 0) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+
+  return Math.round(numericValue);
+}
+
 const CODE39_PATTERNS: Record<string, number[]> = {
   "0": [1,1,2,1,2,2,1,1,1], "1": [2,1,1,1,2,1,1,2,1], "2": [1,2,1,1,2,1,1,2,1],
   "3": [2,2,1,1,2,1,1,1,1], "4": [1,1,2,1,2,1,2,1,1], "5": [2,1,2,1,2,1,2,1,1],
@@ -101,8 +136,8 @@ export function blackBoxElement(x: number, y: number): BlackBoxElement {
     binding: "",
     staticText: "Siyah Kutu",
     font: 2,
-    paddingX: 16,
-    paddingY: 8,
+    width: 0,
+    height: 0,
   };
 }
 
@@ -177,8 +212,8 @@ function migrateLegacyBlackBox(element: TextElement): CanvasElement {
     binding: element.binding,
     staticText: element.staticText || "Siyah Kutu",
     font: element.font,
-    paddingX: 16,
-    paddingY: 8,
+    width: 0,
+    height: 0,
   };
 }
 
@@ -203,12 +238,20 @@ function normalizeElement(rawElement: CanvasElement): CanvasElement {
   }
 
   if (rawElement.type === "blackBox") {
+    const legacyElement = rawElement as BlackBoxElement & { paddingX?: unknown; paddingY?: unknown };
+    const hasExplicitWidth = legacyElement.width !== undefined;
+    const hasExplicitHeight = legacyElement.height !== undefined;
+    const legacyPaddingX = toNonNegativeInt(legacyElement.paddingX, 0);
+    const legacyPaddingY = toNonNegativeInt(legacyElement.paddingY, 0);
+
     return {
       ...rawElement,
+      x: rawElement.x + (!hasExplicitWidth && legacyPaddingX > 0 ? legacyPaddingX : 0),
+      y: rawElement.y + (!hasExplicitHeight && legacyPaddingY > 0 ? legacyPaddingY : 0),
       staticText: rawElement.staticText || "Siyah Kutu",
       font: rawElement.font ?? 2,
-      paddingX: rawElement.paddingX ?? 16,
-      paddingY: rawElement.paddingY ?? 8,
+      width: toNonNegativeInt(legacyElement.width, 0),
+      height: toNonNegativeInt(legacyElement.height, 0),
     };
   }
 
@@ -330,6 +373,12 @@ export function estimateWrappedTextWidth(lines: string[], fontSize: number, wrap
   return Math.max(56, Math.min(wrapWidth, widestLine));
 }
 
+function getBlackBoxTextMetrics(text: string, font: TextFont) {
+  const fontSize = BLACK_BOX_FONT_HEIGHT_MAP[font];
+  const textWidth = Math.max(BLACK_BOX_FONT_WIDTH_MAP[font], text.length * BLACK_BOX_FONT_WIDTH_MAP[font]);
+  return { fontSize, textWidth };
+}
+
 export function wrapText(value: string, fontSize: number, wrapWidth: number, maxLines: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -367,11 +416,22 @@ export function wrapText(value: string, fontSize: number, wrapWidth: number, max
 
 export function getBlackBoxMetrics(element: BlackBoxElement, record?: DataRecord) {
   const text = toAscii(resolveBinding(record, element.binding, element.staticText || element.label)).trim() || element.label;
-  const fontSize = FONT_HEIGHT_MAP[element.font];
-  const width = estimateTextWidth(text, fontSize) + element.paddingX * 2;
-  const height = fontSize + element.paddingY * 2;
+  const { fontSize, textWidth } = getBlackBoxTextMetrics(text, element.font);
+  const autoWidth = textWidth + BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2;
+  const autoHeight = fontSize + BLACK_BOX_AUTO_VERTICAL_PADDING * 2;
+  const width = element.width > 0 ? element.width : autoWidth;
+  const height = element.height > 0 ? element.height : autoHeight;
 
-  return { text, fontSize, width, height };
+  return {
+    text,
+    fontSize,
+    width,
+    height,
+    contentOffsetX: 0,
+    contentOffsetY: 0,
+    contentWidth: width,
+    contentHeight: height,
+  };
 }
 
 export function getElementBottom(element: CanvasElement) {
@@ -418,7 +478,7 @@ export function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | u
     }
 
     if (element.type === "blackBox") {
-      const { text, fontSize, width, height } = getBlackBoxMetrics(element, record);
+      const { text, fontSize, width, height, contentOffsetX, contentOffsetY, contentWidth, contentHeight } = getBlackBoxMetrics(element, record);
       return {
         id: element.id,
         type: "blackBox",
@@ -426,6 +486,10 @@ export function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | u
         y: element.y,
         width,
         height,
+        contentOffsetX,
+        contentOffsetY,
+        contentWidth,
+        contentHeight,
         text,
         fontSize,
       };
@@ -470,7 +534,7 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
       (total, item) => total + (element.y >= item.endY ? item.shift : 0),
       0,
     );
-    const adjustedY = offsetY + element.y + dynamicYOffset;
+    const adjustedY = toInt(offsetY + element.y + dynamicYOffset);
 
     if (element.type === "text") {
       const value = toAscii(resolveBinding(record, element.binding, element.staticText || element.label)).replace(/"/g, "'");
@@ -482,10 +546,10 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
         const textWidth = estimateTextWidth(lineText, fontSize);
         const commandX =
           element.align === "right"
-            ? offsetX + element.x - textWidth
+            ? toInt(offsetX + element.x - textWidth)
             : element.align === "center"
-              ? offsetX + element.x - Math.round(textWidth / 2)
-              : offsetX + element.x;
+              ? toInt(offsetX + element.x - Math.round(textWidth / 2))
+              : toInt(offsetX + element.x);
 
         lines.push(
           `A${commandX},${adjustedY + index * lineHeight},0,${element.font},1,1,${element.reverse ? "R" : "N"},"${lineText}"`,
@@ -505,27 +569,45 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
 
     if (element.type === "blackBox") {
       const value = toAscii(resolveBinding(record, element.binding, element.staticText || element.label)).replace(/"/g, "'");
-      lines.push(
-        `A${offsetX + element.x + element.paddingX},${adjustedY + element.paddingY},0,${element.font},1,1,R,"${value}"`,
-      );
+      const { fontSize, textWidth } = getBlackBoxTextMetrics(value, element.font);
+      const renderWidth = Math.max(1, toNonNegativeInt(element.width > 0 ? element.width : textWidth + BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2, 1));
+      const renderHeight = Math.max(1, toNonNegativeInt(element.height > 0 ? element.height : fontSize + BLACK_BOX_AUTO_VERTICAL_PADDING * 2, 1));
+      const usableTextWidth = Math.max(0, renderWidth - BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2);
+      const maxChars = Math.max(1, Math.floor(Math.max(usableTextWidth, BLACK_BOX_FONT_WIDTH_MAP[element.font]) / BLACK_BOX_FONT_WIDTH_MAP[element.font]));
+      const outputText = value.length > maxChars ? value.slice(0, maxChars) : value;
+      const boxX = toInt(offsetX + element.x);
+      const boxY = adjustedY;
+
+      if (outputText.trim()) {
+        const outputTextWidth = Math.max(BLACK_BOX_FONT_WIDTH_MAP[element.font], outputText.length * BLACK_BOX_FONT_WIDTH_MAP[element.font]);
+        const textX = toInt(boxX + Math.max(0, Math.floor((renderWidth - outputTextWidth) / 2)));
+        const textY = toInt(boxY + Math.max(0, Math.floor((renderHeight - fontSize) / 2)));
+        lines.push(`A${textX},${textY},0,${element.font},1,1,N,"${outputText}"`);
+      }
+
+      lines.push(`LE${boxX},${boxY},${renderWidth},${renderHeight}`);
       return;
     }
 
     if (element.type === "line") {
-      lines.push(`LO${offsetX + element.x},${adjustedY},${element.width},${element.height}`);
+      lines.push(`LO${toInt(offsetX + element.x)},${adjustedY},${Math.max(1, toNonNegativeInt(element.width, 1))},${Math.max(1, toNonNegativeInt(element.height, 1))}`);
       return;
     }
 
     if (element.type === "box") {
+      const x = toInt(offsetX + element.x);
+      const y = adjustedY;
+      const width = Math.max(4, toNonNegativeInt(element.width, 4));
+      const height = Math.max(4, toNonNegativeInt(element.height, 4));
       lines.push(
-        `X${offsetX + element.x},${adjustedY},${element.thickness},${offsetX + element.x + element.width},${adjustedY + element.height}`,
+        `X${x},${y},${Math.max(1, toNonNegativeInt(element.thickness, 1))},${x + width},${y + height}`,
       );
       return;
     }
 
     const value = toAscii(resolveBinding(record, element.binding, element.staticText || "BARCODE")).replace(/"/g, "'");
     lines.push(
-      `B${offsetX + element.x},${adjustedY},0,${element.barcodeType},${element.narrow},${element.wide},${element.height},${element.humanReadable ? "B" : "N"},"${value}"`,
+      `B${toInt(offsetX + element.x)},${adjustedY},0,${element.barcodeType},${Math.max(1, toNonNegativeInt(element.narrow, 1))},${Math.max(2, toNonNegativeInt(element.wide, 2))},${Math.max(1, toNonNegativeInt(element.height, 1))},${element.humanReadable ? "B" : "N"},"${value}"`,
     );
   });
 
@@ -544,19 +626,91 @@ export function parseEplToElements(epl: string, offsetX = DEFAULT_PRINT_OFFSET_X
   const result: CanvasElement[] = [];
   const rows = epl.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
-  rows.forEach((row) => {
+  const parseTextCommand = (row: string) => {
+    const match = row.match(/^A(\d+),(\d+),\d,(\d),\d,\d,([RN]),"(.*)"$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      rawX: Number(match[1]),
+      rawY: Number(match[2]),
+      font: clampTextFont(Number(match[3])),
+      reverse: match[4] === "R",
+      text: match[5],
+    };
+  };
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
     if (row.startsWith("A")) {
-      const match = row.match(/^A(\d+),(\d+),\d,(\d),\d,\d,([RN]),"(.*)"$/);
-      if (!match) {
-        return;
+      const parsedText = parseTextCommand(row);
+      if (!parsedText) {
+        continue;
       }
 
-      const x = Math.max(0, Number(match[1]) - offsetX);
-      const y = Math.max(0, Number(match[2]) - offsetY);
-      const font = clampTextFont(Number(match[3]));
-      const reverse = match[4] === "R";
-      const text = match[5];
-      const fontSize = FONT_HEIGHT_MAP[font];
+      const nextLeMatch = rows[index + 1]?.match(/^LE(\d+),(\d+),(\d+),(\d+)$/);
+      if (nextLeMatch) {
+        const rawX = Number(nextLeMatch[1]);
+        const rawY = Number(nextLeMatch[2]);
+        const width = Math.max(1, Number(nextLeMatch[3]));
+        const height = Math.max(1, Number(nextLeMatch[4]));
+
+        if (
+          parsedText.rawX >= rawX &&
+          parsedText.rawX <= rawX + width &&
+          parsedText.rawY >= rawY &&
+          parsedText.rawY <= rawY + height
+        ) {
+          result.push({
+            id: uid(),
+            type: "blackBox",
+            label: "Siyah Kutu",
+            x: Math.max(0, rawX - offsetX),
+            y: Math.max(0, rawY - offsetY),
+            binding: "",
+            staticText: parsedText.text.trim(),
+            font: parsedText.font,
+            width,
+            height,
+          });
+          index += 1;
+          continue;
+        }
+      }
+
+      const nextLoMatch = rows[index + 1]?.match(/^LO(\d+),(\d+),(\d+),(\d+)$/);
+      const hasHorizontalPadding = parsedText.text !== parsedText.text.trim();
+      if (parsedText.reverse && hasHorizontalPadding && nextLoMatch) {
+        const rawX = parsedText.rawX;
+        const rawY = parsedText.rawY;
+        const fontHeight = BLACK_BOX_FONT_HEIGHT_MAP[parsedText.font];
+        const bottomRawX = Number(nextLoMatch[1]);
+        const bottomRawY = Number(nextLoMatch[2]);
+        const bottomWidth = Math.max(1, Number(nextLoMatch[3]));
+        const bottomHeight = Math.max(1, Number(nextLoMatch[4]));
+
+        if (bottomRawX === rawX && bottomRawY >= rawY + fontHeight) {
+          result.push({
+            id: uid(),
+            type: "blackBox",
+            label: "Siyah Kutu",
+            x: Math.max(0, rawX - offsetX),
+            y: Math.max(0, rawY - offsetY),
+            binding: "",
+            staticText: parsedText.text.trim(),
+            font: parsedText.font,
+            width: bottomWidth,
+            height: bottomRawY - rawY + bottomHeight,
+          });
+          index += 1;
+          continue;
+        }
+      }
+
+      const x = Math.max(0, parsedText.rawX - offsetX);
+      const y = Math.max(0, parsedText.rawY - offsetY);
+      const fontSize = FONT_HEIGHT_MAP[parsedText.font];
 
       result.push({
         id: uid(),
@@ -565,42 +719,99 @@ export function parseEplToElements(epl: string, offsetX = DEFAULT_PRINT_OFFSET_X
         x,
         y,
         binding: "",
-        staticText: text,
-        font,
-        reverse,
+        staticText: parsedText.text,
+        font: parsedText.font,
+        reverse: parsedText.reverse,
         align: "left",
-        wrapWidth: Math.max(56, estimateTextWidth(text, fontSize)),
+        wrapWidth: Math.max(56, estimateTextWidth(parsedText.text, fontSize)),
         maxLines: 1,
       });
-      return;
+      continue;
+    }
+
+    if (row.startsWith("LE")) {
+      const match = row.match(/^LE(\d+),(\d+),(\d+),(\d+)$/);
+      if (!match) {
+        continue;
+      }
+
+      result.push({
+        id: uid(),
+        type: "blackBox",
+        label: "Siyah Kutu",
+        x: Math.max(0, Number(match[1]) - offsetX),
+        y: Math.max(0, Number(match[2]) - offsetY),
+        binding: "",
+        staticText: "",
+        font: 2,
+        width: Math.max(1, Number(match[3])),
+        height: Math.max(1, Number(match[4])),
+      });
+      continue;
     }
 
     if (row.startsWith("LO")) {
       const match = row.match(/^LO(\d+),(\d+),(\d+),(\d+)$/);
       if (!match) {
-        return;
+        continue;
       }
 
+      const rawX = Number(match[1]);
+      const rawY = Number(match[2]);
       const width = Math.max(1, Number(match[3]));
       const height = Math.max(1, Number(match[4]));
+      const parsedText = rows[index + 1] ? parseTextCommand(rows[index + 1]) : null;
+
+      if (
+        parsedText?.reverse &&
+        parsedText.rawX >= rawX &&
+        parsedText.rawX <= rawX + width &&
+        parsedText.rawY >= rawY &&
+        parsedText.rawY <= rawY + height
+      ) {
+        const bottomLoMatch = rows[index + 2]?.match(/^LO(\d+),(\d+),(\d+),(\d+)$/);
+        const hasBottomFill = Boolean(
+          bottomLoMatch &&
+          Number(bottomLoMatch[1]) === rawX &&
+          Math.max(1, Number(bottomLoMatch[3])) === width &&
+          Number(bottomLoMatch[2]) >= parsedText.rawY + BLACK_BOX_FONT_HEIGHT_MAP[parsedText.font],
+        );
+        const bottomHeight = hasBottomFill ? Math.max(1, Number(bottomLoMatch![4])) : 0;
+        const bottomRawY = hasBottomFill ? Number(bottomLoMatch![2]) : rawY;
+
+        result.push({
+          id: uid(),
+          type: "blackBox",
+          label: "Siyah Kutu",
+          x: Math.max(0, rawX - offsetX),
+          y: Math.max(0, rawY - offsetY),
+          binding: "",
+          staticText: parsedText.text.trim(),
+          font: parsedText.font,
+          width,
+          height: hasBottomFill ? Math.max(height, bottomRawY - rawY + bottomHeight) : height,
+        });
+        index += hasBottomFill ? 2 : 1;
+        continue;
+      }
 
       result.push({
         id: uid(),
         type: "line",
         label: "Cizgi",
-        x: Math.max(0, Number(match[1]) - offsetX),
-        y: Math.max(0, Number(match[2]) - offsetY),
+        x: Math.max(0, rawX - offsetX),
+        y: Math.max(0, rawY - offsetY),
         orientation: width >= height ? "horizontal" : "vertical",
         width,
         height,
       });
-      return;
+      continue;
     }
 
     if (row.startsWith("X")) {
       const match = row.match(/^X(\d+),(\d+),(\d+),(\d+),(\d+)$/);
       if (!match) {
-        return;
+        continue;
       }
 
       const x1 = Number(match[1]);
@@ -619,13 +830,13 @@ export function parseEplToElements(epl: string, offsetX = DEFAULT_PRINT_OFFSET_X
         height: Math.max(4, y2 - y1),
         thickness,
       });
-      return;
+      continue;
     }
 
     if (row.startsWith("B")) {
       const match = row.match(/^B(\d+),(\d+),\d,([13]),(\d+),(\d+),(\d+),([BN]),"(.*)"$/);
       if (!match) {
-        return;
+        continue;
       }
 
       result.push({
@@ -643,7 +854,7 @@ export function parseEplToElements(epl: string, offsetX = DEFAULT_PRINT_OFFSET_X
         humanReadable: match[7] === "B",
       });
     }
-  });
+  }
 
   return result;
 }
@@ -664,6 +875,11 @@ export function applyEplOffset(epl: string, offsetX: number, offsetY: number) {
     match = row.match(/^LO(\d+),(\d+),(\d+),(\d+)$/);
     if (match) {
       return `LO${Number(match[1]) + offsetX},${Number(match[2]) + offsetY},${match[3]},${match[4]}`;
+    }
+
+    match = row.match(/^LE(\d+),(\d+),(\d+),(\d+)$/);
+    if (match) {
+      return `LE${Number(match[1]) + offsetX},${Number(match[2]) + offsetY},${match[3]},${match[4]}`;
     }
 
     match = row.match(/^X(\d+),(\d+),(\d+),(\d+),(\d+)$/);
@@ -697,7 +913,7 @@ export function submitEpl(epl: string) {
   const input = document.createElement("input");
   input.type = "hidden";
   input.name = "epl";
-  input.value = encodeURI(epl);
+  input.value = epl;
 
   form.appendChild(input);
   document.body.appendChild(form);

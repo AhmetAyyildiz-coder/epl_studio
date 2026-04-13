@@ -29,8 +29,8 @@ export type BlackBoxElement = BaseElement & {
   binding: string;
   staticText: string;
   font: TextFont;
-  paddingX: number;
-  paddingY: number;
+  width: number;
+  height: number;
 };
 
 export type LineElement = BaseElement & {
@@ -93,6 +93,10 @@ export type PreviewCommand =
       y: number;
       width: number;
       height: number;
+      contentOffsetX: number;
+      contentOffsetY: number;
+      contentWidth: number;
+      contentHeight: number;
       text: string;
       fontSize: number;
     }
