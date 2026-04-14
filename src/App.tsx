@@ -1,15 +1,9 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
-  Alert,
   Box,
   Button,
   Chip,
-  Divider,
   Grid,
-  IconButton,
-  List,
-  ListItemButton,
-  ListItemText,
   MenuItem,
   Paper,
   Stack,
@@ -17,21 +11,17 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  DEFAULT_DPI,
   DEFAULT_PREVIEW_ZOOM,
   DEFAULT_PRINT_OFFSET_X,
   DEFAULT_PRINT_OFFSET_Y,
-  FIELD_LABELS,
-  LABEL_HEIGHT_DOTS,
-  LABEL_HEIGHT_MM,
-  LABEL_WIDTH_DOTS,
-  LABEL_WIDTH_MM,
   SAMPLE_DATA_JSON,
   STORAGE_KEY,
 } from "./designer/constants";
-import { ElementPreview } from "./designer/components/ElementPreview";
 import { ElementPropertiesPanel } from "./designer/components/ElementPropertiesPanel";
 import { ToolboxPanel } from "./designer/components/ToolboxPanel";
+import { CanvasPanel } from "./designer/components/CanvasPanel";
+import { DataPanel } from "./designer/components/DataPanel";
+import { LayoutPanel } from "./designer/components/LayoutPanel";
 import { useDebounce } from "./designer/useDebounce";
 import {
   applyEplOffset,
@@ -77,9 +67,15 @@ export default function App() {
   const [selectedLayoutId, setSelectedLayoutId] = useState(initialDesignerState.selectedLayoutId);
   const [draft, setDraft] = useState<LayoutDraft>(initialDesignerState.draft);
   const [dataSource, setDataSource] = useState<DataSourceConfig>({ jsonText: SAMPLE_DATA_JSON });
-  const [records, setRecords] = useState<DataRecord[]>(() => normalizeRecords(JSON.parse(SAMPLE_DATA_JSON)));
-  const [selectedRecordIndex, setSelectedRecordIndex] = useState(0);
-  const [selectedRecordIndexes, setSelectedRecordIndexes] = useState<number[]>([0]);
+  // Records ve seçili index'leri tek state'de yönet - birden fazla setState çağrısını önler
+  const [recordsState, setRecordsState] = useState(() => ({
+    records: normalizeRecords(JSON.parse(SAMPLE_DATA_JSON)),
+    selectedRecordIndex: 0,
+    selectedRecordIndexes: [0] as number[],
+  }));
+  const records = recordsState.records;
+  const selectedRecordIndex = recordsState.selectedRecordIndex;
+  const selectedRecordIndexes = recordsState.selectedRecordIndexes;
   const [selectedElementId, setSelectedElementId] = useState<string | null>(() => initialDesignerState.draft.elements[0]?.id ?? null);
   const [printOffsetX, setPrintOffsetX] = useState(DEFAULT_PRINT_OFFSET_X);
   const [printOffsetY, setPrintOffsetY] = useState(DEFAULT_PRINT_OFFSET_Y);
@@ -149,10 +145,18 @@ export default function App() {
 
   const activeRecord = records[selectedRecordIndex];
   const deferredActiveRecord = useDeferredValue(activeRecord);
+
+  // selectedElementId'i doğrula - draft'ta yoksa ilk elementi seç (derived state, useEffect yok)
+  const validSelectedElementId = useMemo(() => {
+    if (!selectedElementId) return draft.elements[0]?.id ?? null;
+    const exists = draft.elements.some((element) => element.id === selectedElementId);
+    return exists ? selectedElementId : draft.elements[0]?.id ?? null;
+  }, [selectedElementId, draft.elements]);
+
   const previewCommands = useMemo(() => buildPreviewCommands(renderDraft, deferredActiveRecord), [renderDraft, deferredActiveRecord]);
   const selectedElement = useMemo(
-    () => draft.elements.find((element) => element.id === selectedElementId) ?? null,
-    [draft.elements, selectedElementId],
+    () => draft.elements.find((element) => element.id === validSelectedElementId) ?? null,
+    [draft.elements, validSelectedElementId],
   );
   const datasetKeys = useMemo(() => Array.from(new Set(records.flatMap((record) => Object.keys(record)))), [records]);
   const selectedEpl = useMemo(() => {
@@ -162,7 +166,9 @@ export default function App() {
 
     return deferredSelectedRecordIndexes.map((index) => buildEpl(deferredEplDraft, records[index], 0, 0)).join("");
   }, [deferredEplDraft, records, deferredSelectedRecordIndexes]);
-  const [editedEpl, setEditedEpl] = useState(selectedEpl);
+
+  // Edited EPL state - kullanıcı manuel düzenleme yaptığında kullanılır
+  const [editedEpl, setEditedEpl] = useState<string>("");
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
@@ -205,15 +211,8 @@ export default function App() {
     };
   }, [applyLayoutCollection, setMessageOptimized]);
 
-  useEffect(() => {
-    setEditedEpl(selectedEpl);
-  }, [selectedEpl]);
-
-  useEffect(() => {
-    if (selectedElementId && !draft.elements.find((element) => element.id === selectedElementId)) {
-      setSelectedElementId(draft.elements[0]?.id ?? null);
-    }
-  }, [selectedElementId, draft.elements]);
+  // EPL sync - editedEpl boşsa selectedEpl'i kullan, yoksa editedEpl'i kullan
+  const currentEpl = editedEpl.trim() || selectedEpl;
 
   useEffect(() => {
     if (debouncedJsonText === dataSource.jsonText) {
@@ -224,9 +223,12 @@ export default function App() {
       const payload = JSON.parse(debouncedJsonText) as unknown;
       const nextRecords = normalizeRecords(payload);
       if (nextRecords.length) {
-        setRecords(nextRecords);
-        setSelectedRecordIndex(0);
-        setSelectedRecordIndexes([0]);
+        // Tek setState çağrısı - performans için optimize edildi
+        setRecordsState({
+          records: nextRecords,
+          selectedRecordIndex: 0,
+          selectedRecordIndexes: [0],
+        });
       }
     } catch {
       // typing sirasinda sessiz kal
@@ -453,9 +455,11 @@ export default function App() {
         throw new Error("Kayit bulunamadi");
       }
 
-      setRecords(nextRecords);
-      setSelectedRecordIndex(0);
-      setSelectedRecordIndexes([0]);
+      setRecordsState({
+        records: nextRecords,
+        selectedRecordIndex: 0,
+        selectedRecordIndexes: [0],
+      });
       setMessageOptimized(`${nextRecords.length} kayit JSON'dan yuklendi.`);
     } catch (error) {
       setMessageOptimized(`JSON gecersiz: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
@@ -468,27 +472,27 @@ export default function App() {
       return;
     }
 
-    const shiftedEpl = applyEplOffset(editedEpl || selectedEpl, printOffsetX, printOffsetY);
+    const shiftedEpl = applyEplOffset(currentEpl, printOffsetX, printOffsetY);
     submitEpl(shiftedEpl);
     setMessageOptimized(`${selectedRecordIndexes.length} kayit yazdirma servisine gonderildi.`);
-  }, [editedEpl, printOffsetX, printOffsetY, selectedEpl, selectedRecordIndexes, setMessageOptimized]);
+  }, [currentEpl, printOffsetX, printOffsetY, selectedRecordIndexes, setMessageOptimized]);
 
   const copyEplToClipboard = useCallback(async () => {
-    if (!editedEpl) {
+    if (!currentEpl) {
       setMessageOptimized("Kopyalanacak EPL cikti yok.");
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(editedEpl);
+      await navigator.clipboard.writeText(currentEpl);
       setMessageOptimized("EPL cikti panoya kopyalandi.");
     } catch (error) {
       setMessageOptimized(`EPL kopyalanamadi: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
     }
-  }, [editedEpl, setMessageOptimized]);
+  }, [currentEpl, setMessageOptimized]);
 
   const applyEditedEplToPreview = useCallback(() => {
-    const parsed = parseEplToElements(editedEpl, printOffsetX, printOffsetY);
+    const parsed = parseEplToElements(currentEpl, printOffsetX, printOffsetY);
     if (!parsed.length) {
       setMessageOptimized("EPL parse edilemedi. A/LE/LO/X/B komutlarini kontrol edin.");
       return;
@@ -497,7 +501,7 @@ export default function App() {
     setDraft((prev) => ({ ...prev, elements: parsed }));
     setSelectedElementId(parsed[0]?.id ?? null);
     setMessageOptimized(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
-  }, [editedEpl, printOffsetX, printOffsetY, setMessageOptimized]);
+  }, [currentEpl, printOffsetX, printOffsetY, setMessageOptimized]);
 
   const handleNumberFieldArrow = useCallback<NumberFieldArrowHandler>((event, value, onValueChange, min = 0, step = 1) => {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
@@ -526,98 +530,114 @@ export default function App() {
       "& .MuiChip-root": { borderRadius: 0 },
     }}>
       <Stack spacing={2}>
-        <Paper sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography variant="overline">Durum</Typography>
-            <Typography variant="body1">{layouts.length} taslak, {records.length} veri kaydi</Typography>
-            <Alert severity="info" sx={{ borderRadius: 0 }}>{message}</Alert>
-            {isLoadingRemoteLayouts ? <Typography variant="caption">API sablonlari yukleniyor...</Typography> : null}
+        {/* Durum Bar - Kompakt ve Modern */}
+        <Paper
+          sx={{
+            p: 0,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: { xs: "column", md: "row" },
+            alignItems: "center",
+          }}
+        >
+          {/* Sol taraf - İstatistikler */}
+          <Stack
+            direction="row"
+            spacing={3}
+            sx={{
+              px: 2,
+              py: 1.5,
+              flex: 1,
+              borderBottom: { xs: 1, md: 0 },
+              borderColor: "divider",
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="body2" color="text.secondary">Taslak</Typography>
+              <Chip label={String(layouts.length)} size="small" sx={{ fontWeight: 600, minWidth: 32, height: 24 }} />
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="body2" color="text.secondary">Veri</Typography>
+              <Chip label={String(records.length)} size="small" sx={{ fontWeight: 600, minWidth: 32, height: 24 }} />
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Typography variant="body2" color="text.secondary">Eleman</Typography>
+              <Chip label={String(draft.elements.length)} size="small" sx={{ fontWeight: 600, minWidth: 32, height: 24 }} />
+            </Stack>
+          </Stack>
+
+          {/* Sağ taraf - Mesaj ve Loading */}
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              px: 2,
+              py: 1,
+              alignItems: "center",
+              flex: 2,
+              bgcolor: { xs: "action.hover", md: "transparent" },
+            }}
+          >
+            {isLoadingRemoteLayouts && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ color: "primary.main" }}>
+                <Box
+                  sx={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    border: 2,
+                    borderColor: "currentColor",
+                    borderTopColor: "transparent",
+                    animation: "spin 1s linear infinite",
+                    "@keyframes spin": {
+                      "0%": { transform: "rotate(0deg)" },
+                      "100%": { transform: "rotate(360deg)" },
+                    },
+                  }}
+                />
+                <Typography variant="caption" sx={{ fontWeight: 500 }}>Yükleniyor...</Typography>
+              </Stack>
+            )}
+            <Typography
+              variant="body2"
+              sx={{
+                color: message.toLowerCase().includes("hata") ? "error.main" : "text.primary",
+                flex: 1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {message}
+            </Typography>
           </Stack>
         </Paper>
 
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, xl: 3 }}>
             <Stack spacing={2}>
-              <Paper sx={{ p: 2 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                  <Typography variant="h6">Taslaklar</Typography>
-                  <IconButton
-                    color="primary"
-                    onClick={() => {
-                      const nextDraft = emptyLayout();
-                      setDraft(nextDraft);
-                      setSelectedLayoutId(nextDraft.id);
-                      setSelectedElementId(nextDraft.elements[0]?.id ?? null);
-                    }}
-                  >
-                    +
-                  </IconButton>
-                </Stack>
-                <Stack spacing={1.25} mb={1.5}>
-                  <TextField
-                    size="small"
-                    label="DB Kisa Kod"
-                    value={remoteLayoutFilters.shortCode}
-                    onChange={(event) => updateRemoteFilter("shortCode", event.target.value.toUpperCase())}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        searchRemoteLayouts();
-                      }
-                    }}
-                  />
-                  <TextField
-                    size="small"
-                    label="DB Taslak Adi"
-                    value={remoteLayoutFilters.name}
-                    onChange={(event) => updateRemoteFilter("name", event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        searchRemoteLayouts();
-                      }
-                    }}
-                  />
-                  <Stack direction="row" spacing={1}>
-                    <Button variant="contained" onClick={searchRemoteLayouts} disabled={isLoadingRemoteLayouts} sx={{ flex: 1 }}>
-                      {isLoadingRemoteLayouts ? "Araniyor..." : "DB'de Ara"}
-                    </Button>
-                    <Button variant="outlined" onClick={resetRemoteLayoutSearch} disabled={isLoadingRemoteLayouts}>
-                      Tumunu Getir
-                    </Button>
-                  </Stack>
-                </Stack>
-                <List sx={{ p: 0 }}>
-                  {layouts.map((layout) => (
-                    <ListItemButton
-                      key={layout.id}
-                      selected={layout.id === selectedLayoutId}
-                      onClick={() => selectLayout(layout.id)}
-                      sx={{ mb: 1, borderRadius: 0 }}
-                    >
-                      <ListItemText primary={layout.name} secondary={`${layout.shortCode || "KOD-YOK"} • ${layout.elements.length} eleman`} />
-                    </ListItemButton>
-                  ))}
-                </List>
-              </Paper>
+              <LayoutPanel
+                layouts={layouts}
+                selectedLayoutId={selectedLayoutId}
+                isLoadingRemoteLayouts={isLoadingRemoteLayouts}
+                remoteLayoutFilters={remoteLayoutFilters}
+                onSelectLayout={selectLayout}
+                onCreateNew={() => {
+                  const nextDraft = emptyLayout();
+                  setDraft(nextDraft);
+                  setSelectedLayoutId(nextDraft.id);
+                  setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+                }}
+                onUpdateFilter={updateRemoteFilter}
+                onSearchRemote={searchRemoteLayouts}
+                onResetRemoteSearch={resetRemoteLayoutSearch}
+              />
 
-              <Paper sx={{ p: 2 }}>
-                <Stack spacing={1.5}>
-                  <Typography variant="h6">JSON Veri</Typography>
-                  <Typography color="text.secondary">
-                    Developer dogrudan JSON nesnesi veya JSON array yapistirir. Sistem array ya da tek obje formatini okur.
-                  </Typography>
-                  <TextField
-                    label="JSON"
-                    multiline
-                    minRows={10}
-                    value={dataSource.jsonText}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setDataSource((prev) => ({ ...prev, jsonText: nextValue }));
-                    }}
-                  />
-                  <Button variant="contained" onClick={applyJsonData}>JSON Uygula</Button>
-                </Stack>
-              </Paper>
+              <DataPanel
+                jsonText={dataSource.jsonText}
+                onJsonTextChange={(value) => setDataSource((prev) => ({ ...prev, jsonText: value }))}
+                onApplyJson={applyJsonData}
+              />
             </Stack>
           </Grid>
 
@@ -654,98 +674,26 @@ export default function App() {
                 </Stack>
               </Paper>
 
-              <Paper sx={{ p: 2 }}>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} mb={2}>
-                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                    <Chip label={`${DEFAULT_DPI} DPI`} size="small" />
-                    <Chip label={`${LABEL_WIDTH_MM}mm x ${LABEL_HEIGHT_MM}mm`} size="small" />
-                    <Chip label={`${LABEL_WIDTH_DOTS} x ${LABEL_HEIGHT_DOTS} dot`} size="small" />
-                  </Stack>
-                  <Stack direction="row" spacing={1}>
-                    <TextField
-                      select
-                      size="small"
-                      label="Onizleme Zoom"
-                      value={String(previewZoom)}
-                      onChange={(event) => setPreviewZoom(Number(event.target.value) || DEFAULT_PREVIEW_ZOOM)}
-                      sx={{ minWidth: 140 }}
-                    >
-                      <MenuItem value="1">100%</MenuItem>
-                      <MenuItem value="1.25">125%</MenuItem>
-                      <MenuItem value="1.5">150%</MenuItem>
-                      <MenuItem value="1.75">175%</MenuItem>
-                      <MenuItem value="2">200%</MenuItem>
-                    </TextField>
-                    <TextField
-                      size="small"
-                      label="X Ofset"
-                      type="number"
-                      value={printOffsetX}
-                      onChange={(event) => {
-                        const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
-                        setPrintOffsetX(nextValue);
-                      }}
-                      onBlur={() => setPrintOffsetX((prev) => Math.max(0, Math.round(prev || 0)))}
-                      onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetX, setPrintOffsetX, 0)}
-                    />
-                    <TextField
-                      size="small"
-                      label="Y Ofset"
-                      type="number"
-                      value={printOffsetY}
-                      onChange={(event) => {
-                        const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
-                        setPrintOffsetY(nextValue);
-                      }}
-                      onBlur={() => setPrintOffsetY((prev) => Math.max(0, Math.round(prev || 0)))}
-                      onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetY, setPrintOffsetY, 0)}
-                    />
-                  </Stack>
-                </Stack>
-
-                <ElementPreview
-                  commands={previewCommands}
-                  selectedId={selectedElementId}
-                  zoom={previewZoom}
-                  onSelect={setSelectedElementId}
-                  onMove={moveElement}
-                />
-              </Paper>
-
-              <Paper sx={{ p: 2 }}>
-                <Stack spacing={1.5}>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }}>
-                    <Typography variant="h6">EPL Ciktisi</Typography>
-                    <Stack direction="row" spacing={1}>
-                      <Button variant="contained" onClick={applyEditedEplToPreview} disabled={!editedEpl.trim()}>
-                        EPL Uygula
-                      </Button>
-                      <Button variant="outlined" onClick={copyEplToClipboard} disabled={!editedEpl}>Kopyala</Button>
-                    </Stack>
-                  </Stack>
-                  <TextField
-                    multiline
-                    minRows={10}
-                    maxRows={18}
-                    value={editedEpl}
-                    onChange={(event) => {
-                      const nextValue = event.target.value;
-                      setEditedEpl(nextValue);
-                    }}
-                    placeholder="EPL ciktisi buraya gelecek..."
-                    sx={{
-                      "& .MuiInputBase-input": {
-                        fontFamily: "monospace",
-                        fontSize: 13,
-                        whiteSpace: "pre",
-                      },
-                    }}
-                  />
-                  <Alert severity="info" sx={{ borderRadius: 0 }}>
-                    EPL ciktisi taslaktan otomatik uretilir. Elle degisiklik yapabilirsiniz; taslak/veri degistiginde otomatik guncellenir.
-                  </Alert>
-                </Stack>
-              </Paper>
+              <CanvasPanel
+                draft={draft}
+                previewCommands={previewCommands}
+                selectedElementId={validSelectedElementId}
+                previewZoom={previewZoom}
+                printOffsetX={printOffsetX}
+                printOffsetY={printOffsetY}
+                currentEpl={currentEpl}
+                editedEpl={editedEpl}
+                records={records}
+                onSetPreviewZoom={(zoom) => setPreviewZoom(zoom)}
+                onSetPrintOffsetX={(value) => setPrintOffsetX(value)}
+                onSetPrintOffsetY={(value) => setPrintOffsetY(value)}
+                onSetEditedEpl={(value) => setEditedEpl(value)}
+                onSelectElement={setSelectedElementId}
+                onMoveElement={moveElement}
+                onApplyEpl={applyEditedEplToPreview}
+                onCopyEpl={copyEplToClipboard}
+                handleNumberFieldArrow={handleNumberFieldArrow}
+              />
             </Stack>
           </Grid>
 
@@ -771,19 +719,6 @@ export default function App() {
                 updateElement={updateElement}
                 handleNumberFieldArrow={handleNumberFieldArrow}
               />
-
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" mb={1.5}>Baglanabilir Alanlar</Typography>
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                  {datasetKeys.map((key) => (
-                    <Chip key={key} label={FIELD_LABELS[key as keyof typeof FIELD_LABELS] ?? key} size="small" />
-                  ))}
-                </Stack>
-                <Divider sx={{ my: 1.5 }} />
-                <Typography color="text.secondary">
-                  JSON olarak tek obje ya da obje array yapistirilabilir. Ekran ikisini de okuyup alan listesini binding dropdown'larina yansitir.
-                </Typography>
-              </Paper>
             </Stack>
           </Grid>
         </Grid>

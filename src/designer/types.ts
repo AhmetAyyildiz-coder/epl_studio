@@ -83,6 +83,7 @@ export type PreviewCommand =
       lines: string[];
       fontSize: number;
       reverse: boolean;
+      bold: boolean;
       width: number;
       height: number;
       align: "left" | "center" | "right";

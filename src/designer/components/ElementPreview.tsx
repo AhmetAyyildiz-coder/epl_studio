@@ -33,6 +33,7 @@ function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
       previous.text === next.text &&
       previous.fontSize === next.fontSize &&
       previous.reverse === next.reverse &&
+      previous.bold === next.bold &&
       previous.width === next.width &&
       previous.height === next.height &&
       previous.align === next.align &&
@@ -114,6 +115,7 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
             userSelect: "none",
             fontFamily: "monospace",
             fontSize: `${command.fontSize}px`,
+            fontWeight: command.bold ? 700 : 400,
             lineHeight: 1,
             whiteSpace: "pre-wrap",
             color: command.reverse ? "#fff" : "#111",

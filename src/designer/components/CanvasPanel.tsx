@@ -1,0 +1,174 @@
+import { useMemo } from "react";
+import {
+  Alert,
+  Button,
+  Chip,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import {
+  DEFAULT_DPI,
+  FIELD_LABELS,
+  LABEL_HEIGHT_DOTS,
+  LABEL_HEIGHT_MM,
+  LABEL_WIDTH_DOTS,
+  LABEL_WIDTH_MM,
+} from "../constants";
+import { ElementPreview } from "./ElementPreview";
+import type { CanvasElement, DataRecord, NumberFieldArrowHandler } from "../types";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+
+interface CanvasPanelProps {
+  draft: { elements: CanvasElement[] };
+  previewCommands: string[];
+  selectedElementId: string | null;
+  previewZoom: number;
+  printOffsetX: number;
+  printOffsetY: number;
+  currentEpl: string;
+  editedEpl: string;
+  records: DataRecord[];
+  onSetPreviewZoom: (zoom: number) => void;
+  onSetPrintOffsetX: (value: number) => void;
+  onSetPrintOffsetY: (value: number) => void;
+  onSetEditedEpl: (value: string) => void;
+  onSelectElement: (id: string | null) => void;
+  onMoveElement: (id: string, x: number, y: number) => void;
+  onApplyEpl: () => void;
+  onCopyEpl: () => void;
+  handleNumberFieldArrow: NumberFieldArrowHandler;
+}
+
+export function CanvasPanel({
+  draft,
+  previewCommands,
+  selectedElementId,
+  previewZoom,
+  printOffsetX,
+  printOffsetY,
+  currentEpl,
+  editedEpl,
+  records,
+  onSetPreviewZoom,
+  onSetPrintOffsetX,
+  onSetPrintOffsetY,
+  onSetEditedEpl,
+  onSelectElement,
+  onMoveElement,
+  onApplyEpl,
+  onCopyEpl,
+  handleNumberFieldArrow,
+}: CanvasPanelProps) {
+  const datasetKeys = useMemo(
+    () => Array.from(new Set(records.flatMap((record) => Object.keys(record)))),
+    [records],
+  );
+
+  return (
+    <Stack spacing={2}>
+      <Paper sx={{ p: 2 }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} mb={2}>
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Chip label={`${DEFAULT_DPI} DPI`} size="small" />
+            <Chip label={`${LABEL_WIDTH_MM}mm x ${LABEL_HEIGHT_MM}mm`} size="small" />
+            <Chip label={`${LABEL_WIDTH_DOTS} x ${LABEL_HEIGHT_DOTS} dot`} size="small" />
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              select
+              size="small"
+              label="Onizleme Zoom"
+              value={String(previewZoom)}
+              onChange={(event) => onSetPreviewZoom(Number(event.target.value) || 1)}
+              sx={{ minWidth: 140 }}
+            >
+              <MenuItem value="1">100%</MenuItem>
+              <MenuItem value="1.25">125%</MenuItem>
+              <MenuItem value="1.5">150%</MenuItem>
+              <MenuItem value="1.75">175%</MenuItem>
+              <MenuItem value="2">200%</MenuItem>
+            </TextField>
+            <TextField
+              size="small"
+              label="X Ofset"
+              type="number"
+              value={printOffsetX}
+              onChange={(event) => {
+                const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
+                onSetPrintOffsetX(nextValue);
+              }}
+              onBlur={() => onSetPrintOffsetX((prev) => Math.max(0, Math.round(prev || 0)))}
+              onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetX, onSetPrintOffsetX, 0)}
+            />
+            <TextField
+              size="small"
+              label="Y Ofset"
+              type="number"
+              value={printOffsetY}
+              onChange={(event) => {
+                const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
+                onSetPrintOffsetY(nextValue);
+              }}
+              onBlur={() => onSetPrintOffsetY((prev) => Math.max(0, Math.round(prev || 0)))}
+              onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetY, onSetPrintOffsetY, 0)}
+            />
+          </Stack>
+        </Stack>
+
+        <ElementPreview
+          key={draft.elements.length}
+          commands={previewCommands}
+          selectedId={selectedElementId}
+          zoom={previewZoom}
+          onSelect={onSelectElement}
+          onMove={onMoveElement}
+        />
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }}>
+            <Typography variant="h6">EPL Ciktisi</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" onClick={onApplyEpl} disabled={!currentEpl.trim()}>
+                EPL Uygula
+              </Button>
+              <Button variant="outlined" onClick={onCopyEpl} disabled={!currentEpl}>Kopyala</Button>
+            </Stack>
+          </Stack>
+          <TextField
+            key={currentEpl.slice(0, 50)}
+            multiline
+            minRows={10}
+            maxRows={18}
+            value={editedEpl || currentEpl}
+            onChange={(event) => onSetEditedEpl(event.target.value)}
+            placeholder="EPL ciktisi buraya gelecek..."
+            sx={{
+              "& .MuiInputBase-input": {
+                fontFamily: "monospace",
+                fontSize: 13,
+                whiteSpace: "pre",
+              },
+            }}
+          />
+          <Alert severity="info" sx={{ borderRadius: 0 }}>
+            EPL ciktisi taslaktan otomatik uretilir. Elle degisiklik yapabilirsiniz; taslak/veri degistiginde otomatik guncellenir.
+          </Alert>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        <Typography variant="h6" mb={1.5}>Baglanabilir Alanlar</Typography>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          {datasetKeys.map((key) => (
+            <Chip key={key} label={FIELD_LABELS[key as keyof typeof FIELD_LABELS] ?? key} size="small" />
+          ))}
+        </Stack>
+      </Paper>
+    </Stack>
+  );
+}

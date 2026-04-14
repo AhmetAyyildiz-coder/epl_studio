@@ -375,9 +375,11 @@ export function estimateTextWidth(text: string, fontSize: number) {
   return Math.max(56, Math.round(text.length * fontSize * 0.58));
 }
 
-export function estimateWrappedTextWidth(lines: string[], fontSize: number, wrapWidth: number) {
+export function estimateWrappedTextWidth(lines: string[], fontSize: number, wrapWidth: number, bold: boolean = false) {
   const widestLine = Math.max(...lines.map((line) => estimateTextWidth(line, fontSize)), 0);
-  return Math.max(56, Math.min(wrapWidth, widestLine));
+  const baseWidth = Math.max(56, Math.min(wrapWidth, widestLine));
+  // Bold durumunda Zebra EPL horizontal multiplier 2 kullanır, genişlik ~1.5-2 kat olur
+  return bold ? Math.round(baseWidth * 1.6) : baseWidth;
 }
 
 function getBlackBoxTextMetrics(text: string, font: TextFont) {
@@ -467,6 +469,7 @@ export function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | u
     if (element.type === "text") {
       const text = toAscii(resolveBinding(record, element.binding, element.staticText || element.label));
       const fontSize = FONT_HEIGHT_MAP[element.font];
+      const isBold = element.bold ?? false;
       const lines = wrapText(text, fontSize, element.wrapWidth, element.maxLines);
       const lineHeight = fontSize + 4;
       return {
@@ -478,7 +481,8 @@ export function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | u
         lines,
         fontSize,
         reverse: element.reverse,
-        width: estimateWrappedTextWidth(lines, fontSize, element.wrapWidth),
+        bold: isBold,
+        width: estimateWrappedTextWidth(lines, fontSize, element.wrapWidth, isBold),
         height: Math.max(lineHeight, lines.length * lineHeight),
         align: element.align,
       };
@@ -729,6 +733,7 @@ export function parseEplToElements(epl: string, offsetX = DEFAULT_PRINT_OFFSET_X
         staticText: parsedText.text,
         font: parsedText.font,
         reverse: parsedText.reverse,
+        bold: false,
         align: "left",
         wrapWidth: Math.max(56, estimateTextWidth(parsedText.text, fontSize)),
         maxLines: 1,

@@ -55,14 +55,14 @@ export function TextElementEditor({
       />
       <TextField
         select
-        label="Font"
+        label="Font Boyutu"
         value={element.font}
         onChange={(event) => updateElement(element.id, { font: Number((event.target as HTMLInputElement).value) as TextElement["font"] })}
       >
-        <MenuItem value={1}>Font 1</MenuItem>
-        <MenuItem value={2}>Font 2</MenuItem>
-        <MenuItem value={3}>Font 3</MenuItem>
-        <MenuItem value={4}>Font 4</MenuItem>
+        <MenuItem value={1}>10pt (Küçük)</MenuItem>
+        <MenuItem value={2}>12pt (Orta)</MenuItem>
+        <MenuItem value={3}>14pt (Büyük)</MenuItem>
+        <MenuItem value={4}>18pt (Çok Büyük)</MenuItem>
       </TextField>
       <TextField
         select
