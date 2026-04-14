@@ -13,7 +13,7 @@ type BufferedTextFieldProps = Omit<TextFieldProps, "value" | "onChange"> & {
 export function BufferedTextField({
   value,
   onCommit,
-  commitDelay = 160,
+  commitDelay = 3000,
   onBlur,
   ...props
 }: BufferedTextFieldProps) {
@@ -65,7 +65,7 @@ export function NumberField({
   value,
   min = 0,
   step = 1,
-  commitDelay = 120,
+  commitDelay = 2000,
   helperText,
   handleNumberFieldArrow,
   onChange,

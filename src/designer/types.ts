@@ -19,6 +19,7 @@ export type TextElement = BaseElement & {
   staticText: string;
   font: TextFont;
   reverse: boolean;
+  bold: boolean;
   align: "left" | "center" | "right";
   wrapWidth: number;
   maxLines: number;

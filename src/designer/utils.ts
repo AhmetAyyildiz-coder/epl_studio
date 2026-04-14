@@ -109,6 +109,7 @@ export function textElement(
   y: number,
   font: TextFont = 2,
   align: TextElement["align"] = "left",
+  bold = false,
 ): TextElement {
   return {
     id: uid(),
@@ -120,6 +121,7 @@ export function textElement(
     staticText: "",
     font,
     reverse: false,
+    bold,
     align,
     wrapWidth: 260,
     maxLines: 1,
@@ -200,7 +202,10 @@ export function seedLayouts(): LayoutDraft[] {
 
 function migrateLegacyBlackBox(element: TextElement): CanvasElement {
   if (element.label !== "Siyah Kutu" || !element.reverse) {
-    return element;
+    return {
+      ...element,
+      bold: element.bold ?? false,
+    };
   }
 
   return {
@@ -224,6 +229,8 @@ function normalizeElement(rawElement: CanvasElement): CanvasElement {
       align: rawElement.align ?? "left",
       wrapWidth: rawElement.wrapWidth ?? 260,
       maxLines: rawElement.maxLines ?? 1,
+      bold: rawElement.bold ?? false,
+      reverse: rawElement.reverse ?? false,
     });
 
     if (migrated.type === "blackBox") {
@@ -552,7 +559,7 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
               : toInt(offsetX + element.x);
 
         lines.push(
-          `A${commandX},${adjustedY + index * lineHeight},0,${element.font},1,1,${element.reverse ? "R" : "N"},"${lineText}"`,
+          `A${commandX},${adjustedY + index * lineHeight},0,${element.font},${element.bold ? 2 : 1},1,${element.reverse ? "R" : "N"},"${lineText}"`,
         );
       });
 

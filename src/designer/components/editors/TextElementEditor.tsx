@@ -75,8 +75,12 @@ export function TextElementEditor({
         <MenuItem value="right">Sag</MenuItem>
       </TextField>
       <FormControlLabel
-        control={<Switch checked={element.reverse} onChange={(event) => updateElement(element.id, { reverse: event.target.checked })} />}
+        control={<Switch checked={element.reverse ?? false} onChange={(event) => updateElement(element.id, { reverse: event.target.checked })} />}
         label="Ters Baski"
+      />
+      <FormControlLabel
+        control={<Switch checked={element.bold ?? false} onChange={(event) => updateElement(element.id, { bold: event.target.checked })} />}
+        label="Kalin (Bold)"
       />
     </>
   );

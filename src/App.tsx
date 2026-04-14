@@ -233,37 +233,6 @@ export default function App() {
     }
   }, [debouncedJsonText, dataSource.jsonText]);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Delete" || !selectedElementId) {
-        return;
-      }
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable ||
-          target.closest('[role="textbox"]') ||
-          target.closest('[role="combobox"]'))
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      setDraft((prev) => ({
-        ...prev,
-        elements: prev.elements.filter((element) => element.id !== selectedElementId),
-      }));
-      setSelectedElementId(null);
-      setMessageOptimized("Eleman silindi.");
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedElementId, setMessageOptimized]);
-
   const selectLayout = useCallback((layoutId: string) => {
     const layout = layouts.find((item) => item.id === layoutId);
     if (!layout) {
@@ -403,11 +372,78 @@ export default function App() {
     setMessageOptimized("Eleman silindi.");
   }, [selectedElementId, setMessageOptimized]);
 
+  const duplicateSelectedElement = useCallback(() => {
+    if (!selectedElementId) {
+      setMessageOptimized("Kopyalamak icin bir eleman secin.");
+      return;
+    }
+
+    const elementToClone = draft.elements.find((element) => element.id === selectedElementId);
+    if (!elementToClone) {
+      return;
+    }
+
+    setDraft((prev) => {
+      const clonedElement: CanvasElement = {
+        ...elementToClone,
+        id: uid(),
+        label: `${elementToClone.label} Kopya`,
+        x: elementToClone.x + 10,
+        y: elementToClone.y + 10,
+      };
+      const insertIndex = prev.elements.findIndex((element) => element.id === selectedElementId) + 1;
+      const newElements = [...prev.elements];
+      newElements.splice(insertIndex, 0, clonedElement);
+      setSelectedElementId(clonedElement.id);
+      setMessageOptimized(`"${clonedElement.label}" olusturuldu.`);
+      return { ...prev, elements: newElements };
+    });
+  }, [selectedElementId, draft.elements, setMessageOptimized]);
+
   const clearAllElements = useCallback(() => {
     setDraft((prev) => ({ ...prev, elements: [] }));
     setSelectedElementId(null);
     setMessageOptimized("Tum elemanlar temizlendi.");
   }, [setMessageOptimized]);
+
+  // Keyboard shortcuts - Delete ve Ctrl+D
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const isInputFocused =
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable ||
+          target.closest('[role="textbox"]') ||
+          target.closest('[role="combobox"]'));
+
+      if (isInputFocused) {
+        return;
+      }
+
+      // Delete - Eleman sil
+      if (event.key === "Delete" && selectedElementId) {
+        event.preventDefault();
+        setDraft((prev) => ({
+          ...prev,
+          elements: prev.elements.filter((element) => element.id !== selectedElementId),
+        }));
+        setSelectedElementId(null);
+        setMessageOptimized("Eleman silindi.");
+        return;
+      }
+
+      // Ctrl+D - Eleman kopyala
+      if (event.key === "d" && (event.ctrlKey || event.metaKey) && selectedElementId) {
+        event.preventDefault();
+        duplicateSelectedElement();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedElementId, setMessageOptimized, duplicateSelectedElement]);
 
   const applyJsonData = useCallback(() => {
     try {
@@ -721,6 +757,7 @@ export default function App() {
                 onAddLine={() => addElement("line")}
                 onAddBox={() => addElement("box")}
                 onAddBarcode={() => addElement("barcode")}
+                onDuplicateSelected={duplicateSelectedElement}
                 onRemoveSelected={removeSelectedElement}
                 onClearAll={clearAllElements}
               />

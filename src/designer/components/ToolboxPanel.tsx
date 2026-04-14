@@ -7,6 +7,7 @@ type ToolboxPanelProps = {
   onAddLine: () => void;
   onAddBox: () => void;
   onAddBarcode: () => void;
+  onDuplicateSelected: () => void;
   onRemoveSelected: () => void;
   onClearAll: () => void;
 };
@@ -17,6 +18,7 @@ export const ToolboxPanel = memo(function ToolboxPanel({
   onAddLine,
   onAddBox,
   onAddBarcode,
+  onDuplicateSelected,
   onRemoveSelected,
   onClearAll,
 }: ToolboxPanelProps) {
@@ -29,6 +31,7 @@ export const ToolboxPanel = memo(function ToolboxPanel({
         <Button variant="outlined" onClick={onAddLine}>Cizgi</Button>
         <Button variant="outlined" onClick={onAddBox}>Kutu</Button>
         <Button variant="outlined" onClick={onAddBarcode}>Barcode</Button>
+        <Button variant="outlined" color="success" onClick={onDuplicateSelected}>Kopyala</Button>
         <Button variant="outlined" color="error" onClick={onRemoveSelected}>Sil</Button>
         <Button variant="outlined" color="error" onClick={onClearAll}>Tum Elemanlari Temizle</Button>
       </Stack>
