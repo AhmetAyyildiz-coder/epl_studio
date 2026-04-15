@@ -18,12 +18,12 @@ import {
   LABEL_WIDTH_MM,
 } from "../constants";
 import { ElementPreview } from "./ElementPreview";
-import type { CanvasElement, DataRecord, NumberFieldArrowHandler } from "../types";
+import type { CanvasElement, DataRecord, NumberFieldArrowHandler, PreviewCommand } from "../types";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 interface CanvasPanelProps {
   draft: { elements: CanvasElement[] };
-  previewCommands: string[];
+  previewCommands: PreviewCommand[];
   selectedElementId: string | null;
   previewZoom: number;
   printOffsetX: number;
@@ -100,7 +100,7 @@ export function CanvasPanel({
                 const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
                 onSetPrintOffsetX(nextValue);
               }}
-              onBlur={() => onSetPrintOffsetX((prev) => Math.max(0, Math.round(prev || 0)))}
+              onBlur={() => onSetPrintOffsetX(Math.max(0, Math.round(printOffsetX || 0)))}
               onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetX, onSetPrintOffsetX, 0)}
             />
             <TextField
@@ -112,7 +112,7 @@ export function CanvasPanel({
                 const nextValue = Math.max(0, Math.round(Number((event.target as HTMLInputElement).value) || 0));
                 onSetPrintOffsetY(nextValue);
               }}
-              onBlur={() => onSetPrintOffsetY((prev) => Math.max(0, Math.round(prev || 0)))}
+              onBlur={() => onSetPrintOffsetY(Math.max(0, Math.round(printOffsetY || 0)))}
               onKeyDown={(event) => handleNumberFieldArrow(event as ReactKeyboardEvent<HTMLDivElement>, printOffsetY, onSetPrintOffsetY, 0)}
             />
           </Stack>

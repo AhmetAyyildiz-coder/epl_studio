@@ -2,7 +2,10 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 export type Primitive = string | number | boolean | null | undefined;
 export type DataRecord = Record<string, Primitive>;
+
+// Bitmap fontlar (EPL Font 1-5)
 export type TextFont = 1 | 2 | 3 | 4;
+
 export type ElementType = "text" | "blackBox" | "line" | "box" | "barcode";
 
 export type BaseElement = {

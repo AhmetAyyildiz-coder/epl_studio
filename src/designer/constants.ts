@@ -12,6 +12,8 @@ export const LABEL_WIDTH_DOTS = Math.round(LABEL_WIDTH_MM * DOTS_PER_MM);
 export const LABEL_HEIGHT_DOTS = Math.round(LABEL_HEIGHT_MM * DOTS_PER_MM);
 export const DEFAULT_PRINT_OFFSET_X = 260;
 export const DEFAULT_PRINT_OFFSET_Y = 8;
+
+// Bitmap fontlar için sabit boyutlar
 export const FONT_HEIGHT_MAP: Record<TextFont, number> = { 1: 20, 2: 28, 3: 36, 4: 44 };
 
 export const SAMPLE_DATA_JSON = JSON.stringify(

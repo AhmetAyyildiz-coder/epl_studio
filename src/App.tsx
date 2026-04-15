@@ -1,10 +1,9 @@
-import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
   Chip,
   Grid,
-  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -36,7 +35,7 @@ import {
   uid,
 } from "./designer/utils";
 import { createEtiketSablonu, listEtiketSablonlari, updateEtiketSablonu } from "./services/etiketSablonuService";
-import type { CanvasElement, DataRecord, DataSourceConfig, ElementType, LayoutDraft, NumberFieldArrowHandler } from "./designer/types";
+import type { CanvasElement, DataSourceConfig, ElementType, LayoutDraft, NumberFieldArrowHandler } from "./designer/types";
 
 type RemoteLayoutFilters = {
   shortCode: string;
@@ -214,6 +213,12 @@ export default function App() {
   // EPL sync - editedEpl boşsa selectedEpl'i kullan, yoksa editedEpl'i kullan
   const currentEpl = editedEpl.trim() || selectedEpl;
 
+  // Taslak değiştiğinde EPL düzenlemesini sıfırla
+  useEffect(() => {
+    setEditedEpl("");
+  }, [draft.id]);
+
+  // Seçili kayıtlar değiştiğinde EPL'yi güncelle
   useEffect(() => {
     if (debouncedJsonText === dataSource.jsonText) {
       return;
@@ -245,6 +250,7 @@ export default function App() {
     setSelectedLayoutId(layout.id);
     setDraft(nextDraft);
     setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+    setEditedEpl(""); // EPL çıktısını sıfırla - yeni taslak için yeniden hesaplansın
     setMessageOptimized(`"${layout.name}" acildi.`);
   }, [layouts, setMessageOptimized]);
 

@@ -11,7 +11,6 @@ import {
   Typography,
 } from "@mui/material";
 import type { LayoutDraft } from "../types";
-import { emptyLayout, uid } from "../utils";
 
 type RemoteLayoutFilters = {
   shortCode: string;

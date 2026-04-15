@@ -37,6 +37,7 @@ const trMap: Record<string, string> = {
 
 const trRegex = new RegExp(`[${Object.keys(trMap).join("")}]`, "g");
 
+// Black box fontları
 const BLACK_BOX_FONT_HEIGHT_MAP: Record<TextFont, number> = {
   1: 20,
   2: 28,
@@ -552,6 +553,7 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
       const fontSize = FONT_HEIGHT_MAP[element.font];
       const wrappedLines = wrapText(value, fontSize, element.wrapWidth, element.maxLines);
       const lineHeight = fontSize + 4;
+      const isScalableFont = typeof element.font === "string";
 
       wrappedLines.forEach((lineText, index) => {
         const textWidth = estimateTextWidth(lineText, fontSize);
@@ -562,9 +564,20 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
               ? toInt(offsetX + element.x - Math.round(textWidth / 2))
               : toInt(offsetX + element.x);
 
-        lines.push(
-          `A${commandX},${adjustedY + index * lineHeight},0,${element.font},${element.bold ? 2 : 1},1,${element.reverse ? "R" : "N"},"${lineText}"`,
-        );
+        if (isScalableFont) {
+          // Scalable font format: A{x},{y},{fontSize},{fontName},{hMult},{vMult},{alignment},"{text}"
+          // Bold için multiplier kullanılır
+          const hMult = element.bold ? 2 : 1;
+          const vMult = 1;
+          lines.push(
+            `A${commandX},${adjustedY + index * lineHeight},${fontSize},${element.font},${hMult},${vMult},${element.reverse ? "R" : "N"},"${lineText}"`,
+          );
+        } else {
+          // Bitmap font format: A{x},{y},0,{font},{hMult},{vMult},{alignment},"{text}"
+          lines.push(
+            `A${commandX},${adjustedY + index * lineHeight},0,${element.font},${element.bold ? 2 : 1},1,${element.reverse ? "R" : "N"},"${lineText}"`,
+          );
+        }
       });
 
       if (wrappedLines.length > 1) {
@@ -592,7 +605,7 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
       if (outputText.trim()) {
         const outputTextWidth = Math.max(BLACK_BOX_FONT_WIDTH_MAP[element.font], outputText.length * BLACK_BOX_FONT_WIDTH_MAP[element.font]);
         const textX = toInt(boxX + Math.max(0, Math.floor((renderWidth - outputTextWidth) / 2)));
-        const textY = toInt(boxY + Math.max(0, Math.floor((renderHeight - fontSize) / 2)));
+        const textY = toInt(boxX + Math.max(0, Math.floor((renderHeight - fontSize) / 2)));
         lines.push(`A${textX},${textY},0,${element.font},1,1,N,"${outputText}"`);
       }
 
