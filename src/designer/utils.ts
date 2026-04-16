@@ -137,7 +137,7 @@ export function blackBoxElement(x: number, y: number): BlackBoxElement {
     x,
     y,
     binding: "",
-    staticText: "Siyah Kutu",
+    staticText: "",
     font: 2,
     width: 0,
     height: 0,
@@ -216,7 +216,7 @@ function migrateLegacyBlackBox(element: TextElement): CanvasElement {
     x: element.x,
     y: element.y,
     binding: element.binding,
-    staticText: element.staticText || "Siyah Kutu",
+    staticText: element.staticText ?? "Siyah Kutu",
     font: element.font,
     width: 0,
     height: 0,
@@ -256,7 +256,7 @@ function normalizeElement(rawElement: CanvasElement): CanvasElement {
       ...rawElement,
       x: rawElement.x + (!hasExplicitWidth && legacyPaddingX > 0 ? legacyPaddingX : 0),
       y: rawElement.y + (!hasExplicitHeight && legacyPaddingY > 0 ? legacyPaddingY : 0),
-      staticText: rawElement.staticText || "Siyah Kutu",
+      staticText: rawElement.staticText ?? "Siyah Kutu",
       font: rawElement.font ?? 2,
       width: toNonNegativeInt(legacyElement.width, 0),
       height: toNonNegativeInt(legacyElement.height, 0),
@@ -425,7 +425,7 @@ export function wrapText(value: string, fontSize: number, wrapWidth: number, max
 }
 
 export function getBlackBoxMetrics(element: BlackBoxElement, record?: DataRecord) {
-  const text = toAscii(resolveBinding(record, element.binding, element.staticText || element.label)).trim() || element.label;
+  const text = toAscii(resolveBinding(record, element.binding, element.staticText)).trim();
   const { fontSize, textWidth } = getBlackBoxTextMetrics(text, element.font);
   const autoWidth = textWidth + BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2;
   const autoHeight = fontSize + BLACK_BOX_AUTO_VERTICAL_PADDING * 2;
@@ -532,6 +532,8 @@ export function buildPreviewCommands(layout: LayoutDraft, record: DataRecord | u
       width: barcodePreviewWidth(text, element.narrow, element.wide),
       height: element.height,
       text,
+      barcodeType: element.barcodeType,
+      moduleWidth: element.narrow,
       humanReadable: element.humanReadable,
     };
   });
@@ -564,19 +566,21 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
               ? toInt(offsetX + element.x - Math.round(textWidth / 2))
               : toInt(offsetX + element.x);
 
-        if (isScalableFont) {
-          // Scalable font format: A{x},{y},{fontSize},{fontName},{hMult},{vMult},{alignment},"{text}"
-          // Bold için multiplier kullanılır
-          const hMult = element.bold ? 2 : 1;
-          const vMult = 1;
-          lines.push(
-            `A${commandX},${adjustedY + index * lineHeight},${fontSize},${element.font},${hMult},${vMult},${element.reverse ? "R" : "N"},"${lineText}"`,
-          );
-        } else {
-          // Bitmap font format: A{x},{y},0,{font},{hMult},{vMult},{alignment},"{text}"
-          lines.push(
-            `A${commandX},${adjustedY + index * lineHeight},0,${element.font},${element.bold ? 2 : 1},1,${element.reverse ? "R" : "N"},"${lineText}"`,
-          );
+        // Bold için: aynı metni 3 kez yaz (x, x+1, x+2 koordinatlarında)
+        const boldCount = element.bold ? 3 : 1;
+        for (let b = 0; b < boldCount; b++) {
+          const boldOffsetX = element.bold ? b : 0;
+          if (isScalableFont) {
+            // Scalable font format: A{x},{y},{fontSize},{fontName},{hMult},{vMult},{alignment},"{text}"
+            lines.push(
+              `A${commandX + boldOffsetX},${adjustedY + index * lineHeight},${fontSize},${element.font},1,1,${element.reverse ? "R" : "N"},"${lineText}"`,
+            );
+          } else {
+            // Bitmap font format: A{x},{y},0,{font},{hMult},{vMult},{alignment},"{text}"
+            lines.push(
+              `A${commandX + boldOffsetX},${adjustedY + index * lineHeight},0,${element.font},1,1,${element.reverse ? "R" : "N"},"${lineText}"`,
+            );
+          }
         }
       });
 
@@ -592,10 +596,10 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
     }
 
     if (element.type === "blackBox") {
-      const value = toAscii(resolveBinding(record, element.binding, element.staticText || element.label)).replace(/"/g, "'");
-      const { fontSize, textWidth } = getBlackBoxTextMetrics(value, element.font);
-      const renderWidth = Math.max(1, toNonNegativeInt(element.width > 0 ? element.width : textWidth + BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2, 1));
-      const renderHeight = Math.max(1, toNonNegativeInt(element.height > 0 ? element.height : fontSize + BLACK_BOX_AUTO_VERTICAL_PADDING * 2, 1));
+      const { text, fontSize, width, height } = getBlackBoxMetrics(element, record);
+      const value = text.replace(/"/g, "'");
+      const renderWidth = Math.max(1, toNonNegativeInt(width, 1));
+      const renderHeight = Math.max(1, toNonNegativeInt(height, 1));
       const usableTextWidth = Math.max(0, renderWidth - BLACK_BOX_AUTO_HORIZONTAL_PADDING * 2);
       const maxChars = Math.max(1, Math.floor(Math.max(usableTextWidth, BLACK_BOX_FONT_WIDTH_MAP[element.font]) / BLACK_BOX_FONT_WIDTH_MAP[element.font]));
       const outputText = value.length > maxChars ? value.slice(0, maxChars) : value;
@@ -605,7 +609,7 @@ export function buildEpl(layout: LayoutDraft, record: DataRecord | undefined, of
       if (outputText.trim()) {
         const outputTextWidth = Math.max(BLACK_BOX_FONT_WIDTH_MAP[element.font], outputText.length * BLACK_BOX_FONT_WIDTH_MAP[element.font]);
         const textX = toInt(boxX + Math.max(0, Math.floor((renderWidth - outputTextWidth) / 2)));
-        const textY = toInt(boxX + Math.max(0, Math.floor((renderHeight - fontSize) / 2)));
+        const textY = toInt(boxY + Math.max(0, Math.floor((renderHeight - fontSize) / 2)));
         lines.push(`A${textX},${textY},0,${element.font},1,1,N,"${outputText}"`);
       }
 
@@ -938,7 +942,7 @@ export function submitEpl(epl: string) {
   const input = document.createElement("input");
   input.type = "hidden";
   input.name = "epl";
-  input.value = epl;
+  input.value = encodeURIComponent(epl);
 
   form.appendChild(input);
   document.body.appendChild(form);

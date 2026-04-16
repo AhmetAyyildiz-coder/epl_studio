@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+
+
+
+<html>
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+        Print RAW Commands
+    </title>
+    <link rel="stylesheet" href="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.6/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />
+
+    <style type="text/css">
+        .navbar-custom {
+            background-color: #244157;
+            color: #ffffff;
+            border-radius: 0;
+        }
+
+        .navbar-custom .navbar-nav>li>a {
+            color: #fff;
+        }
+
+        .navbar-custom .navbar-nav>.active>a,
+        .navbar-nav>.active>a:hover,
+        .navbar-nav>.active>a:focus {
+            color: #ffffff;
+            background-color: transparent;
+        }
+
+        .navbar-custom .navbar-nav>li>a:hover,
+        .nav>li>a:focus {
+            text-decoration: none;
+            background-color: #acdaee;
+        }
+
+        .navbar-custom .navbar-brand {
+            color: #eeeeee;
+        }
+
+        .navbar-custom .navbar-toggle {
+            background-color: #eeeeee;
+        }
+
+        .navbar-custom .icon-bar {
+            background-color: #acdaee;
+        }
+
+
+        .round.white {
+            background-color: #fff;
+            color: #244157
+        }
+
+        .round {
+            display: inline-block;
+            height: 32px;
+            width: 32px;
+            line-height: 32px;
+            -moz-border-radius: 16px;
+            border-radius: 16px;
+            background-color: #222;
+            color: #FFF;
+            text-align: center;
+        }
+
+        .icon {
+            color: firebrick;
+        }
+    </style>
+
+
+
+    <style type="text/css">
+        fieldset {
+            width: 700px;
+            border: 0 none #ffffff;
+        }
+
+        legend {
+            visibility: hidden;
+        }
+
+        label {
+            display: block;
+            margin: 15px 0 5px;
+        }
+
+        input[type=text],
+        input[type=password] {
+            width: 300px;
+            padding: 5px;
+            border: solid 1px #000;
+        }
+
+        .prev {
+            float: left;
+        }
+
+        .next {
+            float: right;
+        }
+
+        #steps {
+            list-style: none;
+            width: 100%;
+            overflow: hidden;
+            margin: 0px;
+            padding: 0px;
+        }
+
+        #steps li {
+            font-size: 24px;
+            float: left;
+            padding: 10px;
+            color: #b0b1b3;
+        }
+
+        #steps li span {
+            font-size: 11px;
+            display: block;
+        }
+
+        #steps li.current {
+            color: #000;
+        }
+    </style>
+
+</head>
+
+<body>
+    <div class="container body-content">
+        <br />
+
+
+
+        <form id="myForm" action="">
+
+
+            <input type="hidden" id="sid" name="sid" value="lxe5110nvunukhqpy5ktkiyj" />
+
+
+
+
+
+            <div>
+
+                <select id="pid" name="pid" style="display:none;">
+                        <option selected="selected" value="0">Use Default Printer</option>
+                        <option value="1">Display a Printer dialog</option>
+                        <option value="2" selected="selected">Use an installed Printer</option>
+                        <option value="3">Use an IP/Etherner Printer</option>
+                        <option value="4">Use a LPT port</option>
+                        <option value="5">Use a RS232 (COM) port</option>
+                    </select>
+
+            </div>
+            <center> <br />
+
+
+                <select name="installedPrinterName" id="installedPrinterName"></select>
+
+
+                <script type="text/javascript">
+                    //var wcppGetPrintersDelay_ms = 5000; //5 sec
+var wcppGetPrintersTimeout_ms = 10000; //10 sec
+var wcppGetPrintersTimeoutStep_ms = 500; //0.5 sec
+
+                        function wcpGetPrintersOnSuccess() {
+                            // Display client installed printers
+                            if (arguments[0].length > 0) {
+
+
+
+                                var p = arguments[0].split("|");
+
+
+                                var options = '';
+
+
+
+                                var sectim = '';
+                                for (var i = 0; i < p.length; i++) {
+                                    options += '<option ';
+                                    if (p[i].indexOf("Label") >= 0 || p[i].indexOf("Argox") >= 0) {
+
+                                        if (sectim == 1) {
+                                            if (p[i].indexOf("\\") >= 0) {
+                                                sectim = 0;
+                                            } else {
+                                                options += 'selected="selected"';
+                                                sectim = 1;
+                                            }
+
+                                        }
+                                        else {
+                                            options += 'selected="selected"';
+                                            sectim = 1;
+                                        }
+                                    }
+                                    options += '>' + p[i] + '</option>';
+                                }
+
+
+                                //for (var i = 0; i < p.length; i++) {
+                                //    options += '<option>' + p[i] + '</option>';
+                                //}
+
+
+
+
+
+
+
+
+                                $('#installedPrinterName').html(options);
+                                $('#installedPrinterName').focus();
+                                $('#loadPrinters').hide();
+                            } else {
+                                alert("No printers are installed in your system.");
+                            }
+                        }
+
+                        function wcpGetPrintersOnFailure() {
+                            // Do something if printers cannot be got from the client 
+                            alert("No printers are installed in your system.");
+                        }
+                </script>
+
+
+
+
+
+
+
+
+
+
+                <textarea id="printerCommands" name="printerCommands" rows="10" cols="80" class="form-control" style="display:none;">ZT
+q709
+Q413,24
+R0,0
+N
+A4,0,0,3,1,1,N,"Refno-Atl :"
+A418,0,0,3,1,1,N,"947"
+A237,3,0,3,1,1,N,"888327"
+A365,0,0,3,1,1,N,"-"
+P1
+</textarea>
+                <br /> <br />
+
+                <a href="#" onclick="javascript:doClientPrint();printerim();" class="btn btn-large btn-success">Çıktı
+                    Al</a>
+
+
+            </center>
+
+        </form>
+
+        <div style="top:0; right:0; bottom:0; left:0; position:absolute; background-color:#000; opacity:0.7; display:none; color:white; font-weight:bold;  "
+            id="bekle"><br /><br /><br />
+            <center> Yazdırılıyor... </center>
+        </div>
+
+
+        <footer>
+        </footer>
+    </div>
+
+
+    <script src="https://ajax.aspnetcdn.com/ajax/jquery/jquery-2.2.0.min.js"></script>
+    <script src="https://ajax.aspnetcdn.com/ajax/bootstrap/3.3.6/bootstrap.min.js"></script>
+
+
+
+
+    <script
+        src="https://intranet.arpas.com:443/EPL_v3/WebClientPrintAPI.ashx?v5.0.0.0&639117649594381759&sid=lxe5110nvunukhqpy5ktkiyj&u=aHR0cHM6Ly9pbnRyYW5ldC5hcnBhcy5jb206NDQzL0VQTF92My9EZW1vUHJpbnRDb21tYW5kc0hhbmRsZXIuYXNoeA=="
+        type="text/javascript"></script>
+
+
+
+    <script type="text/javascript">
+        function doClientPrint() {
+
+                    //collect printer settings and raw commands
+                    var printerSettings = $("#myForm").serialize();
+
+                    //store printer settings in the server cache...
+                    $.post('/EPL_v3/DemoPrintCommandsHandler.ashx',
+                        printerSettings
+                    );
+
+                    //// Launch WCPP at the client side for printing...
+                    //var sessionId = $("#sid").val();
+                    //jsWebClientPrint.print('sid=' + sessionId);
+
+                }
+
+
+                $(document).ready(function () {
+                   
+                   
+
+                 
+                  
+                     
+                $("#installedPrinter").show();
+                $("#bekle").hide();
+                
+
+                   
+                   
+
+
+                });
+
+                function displayInfo(i) {
+                    if (i == 0)
+                        $("#info").html('This will make the WCPP to send the commands to the printer installed in your machine as "Default Printer" without displaying any dialog!');
+                    else if (i == 1)
+                        $("#info").html('This will make the WCPP to display the Printer dialog so you can select which printer you want to use.');
+                    else if (i == 2)
+                        $("#info").html('Please specify the <b>Printer\'s Name</b> as it figures installed under your system.');
+                    else if (i == 3)
+                        $("#info").html('Please specify the Network Printer info.<br /><strong>On Linux &amp; Mac</strong> it\'s recommended you install the printer through <strong>CUPS</strong> and set the assigned printer name to the <strong>"Use an installed Printer"</strong> option on this demo.');
+                    else if (i == 4)
+                        $("#info").html('Please specify the Parallel Port which your printer is connected to.<br /><strong>On Linux &amp; Mac</strong> you must install the printer through <strong>CUPS</strong> and set the assigned printer name to the <strong>"Use an installed Printer"</strong> option on this demo.');
+                    else if (i == 5)
+                        $("#info").html('Please specify the Serial RS232 Port info which your printer does support.<br /><strong>On Linux &amp; Mac</strong> you must install the printer through <strong>CUPS</strong> and set the assigned printer name to the <strong>"Use an installed Printer"</strong> option on this demo.');
+                }
+
+                function hidePrinters() {
+                    $("#installedPrinter").hide(); $("#netPrinter").hide(); $("#parallelPrinter").hide(); $("#serialPrinter").hide();
+                }
+
+
+
+
+                /* FORM to WIZARD */
+                /* Created by jankoatwarpspeed.com */
+
+                (function ($) {
+                    $.fn.formToWizard = function () {
+
+                        var element = this;
+
+                        var steps = $(element).find("fieldset");
+                        var count = steps.size();
+
+
+                        // 2
+                        $(element).before("<ul id='steps'></ul>");
+
+                        steps.each(function (i) {
+                            $(this).wrap("<div id='step" + i + "'></div>");
+                            $(this).append("<p id='step" + i + "commands'></p>");
+
+                            // 2
+                            var name = $(this).find("legend").html();
+                            $("#steps").append("<li id='stepDesc" + i + "'>Step " + (i + 1) + "<span>" + name + "</span></li>");
+
+                            if (i == 0) {
+                                createNextButton(i);
+                                selectStep(i);
+                            }
+                            else if (i == count - 1) {
+                                $("#step" + i).hide();
+                                createPrevButton(i);
+                            }
+                            else {
+                                $("#step" + i).hide();
+                                createPrevButton(i);
+                                createNextButton(i);
+                            }
+                        });
+
+                        function createPrevButton(i) {
+                            var stepName = "step" + i;
+                            $("#" + stepName + "commands").append("<a href='#' id='" + stepName + "Prev' class='prev btn btn-info'>< Back</a>");
+
+                            $("#" + stepName + "Prev").bind("click", function (e) {
+                                $("#" + stepName).hide();
+                                $("#step" + (i - 1)).show();
+
+                                selectStep(i - 1);
+                            });
+                        }
+
+                        function createNextButton(i) {
+                            var stepName = "step" + i;
+                            $("#" + stepName + "commands").append("<a href='#' id='" + stepName + "Next' class='next btn btn-info'>Next ></a>");
+
+                            $("#" + stepName + "Next").bind("click", function (e) {
+                                $("#" + stepName).hide();
+                                $("#step" + (i + 1)).show();
+
+                                selectStep(i + 1);
+                            });
+                        }
+
+                        function selectStep(i) {
+                            $("#steps li").removeClass("current");
+                            $("#stepDesc" + i).addClass("current");
+                        }
+
+                    }
+                })(jQuery);
+
+
+                jsWebClientPrint.getPrinters();
+
+
+                function printerim() {
+
+                    $("#bekle").show();
+
+                    setTimeout(function () {
+                        
+                        // Launch WCPP at the client side for printing...
+                        var sessionId = $("#sid").val();
+                        jsWebClientPrint.print('sid=' + sessionId);
+
+                        setTimeout(function () {
+                            this.close();
+
+                            //
+                        }, 3000);
+
+                        //
+                    }, 0);
+
+
+                  
+
+                                         
+                   
+                    
+                   
+
+                   
+                   
+                  
+                   
+                   
+                   
+
+                }
+
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+</body>
+
+</html>

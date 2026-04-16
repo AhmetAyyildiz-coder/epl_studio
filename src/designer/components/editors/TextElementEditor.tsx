@@ -36,7 +36,7 @@ export function TextElementEditor({
       <TwoColumnFields
         left={
           <NumberField
-            label="Wrap Width"
+            label="Satir Genisligi"
             value={element.wrapWidth}
             min={56}
             handleNumberFieldArrow={handleNumberFieldArrow}
@@ -45,7 +45,7 @@ export function TextElementEditor({
         }
         right={
           <NumberField
-            label="Max Lines"
+            label="En Fazla Satir"
             value={element.maxLines}
             min={1}
             handleNumberFieldArrow={handleNumberFieldArrow}

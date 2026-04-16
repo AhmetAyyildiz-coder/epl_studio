@@ -480,6 +480,7 @@ export default function App() {
 
     const shiftedEpl = applyEplOffset(currentEpl, printOffsetX, printOffsetY);
     submitEpl(shiftedEpl);
+    console.log("Yazdirilan EPL:", shiftedEpl);
     setMessageOptimized(`${selectedRecordIndexes.length} kayit yazdirma servisine gonderildi.`);
   }, [currentEpl, printOffsetX, printOffsetY, selectedRecordIndexes, setMessageOptimized]);
 

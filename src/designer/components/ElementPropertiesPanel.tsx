@@ -55,26 +55,29 @@ export const ElementPropertiesPanel = memo(function ElementPropertiesPanel({
                 helperText="Bu ad sadece editor icinde gorunur."
                 onCommit={(next) => updateElement(selectedElement.id, { label: next })}
               />
-              <Grid container spacing={1.5}>
-                <Grid size={{ xs: 6 }}>
-                  <NumberField
-                    label="X"
-                    value={selectedElement.x}
-                    min={0}
-                    handleNumberFieldArrow={handleNumberFieldArrow}
-                    onChange={(next) => updateElement(selectedElement.id, { x: next })}
-                  />
+
+              {selectedElement.type !== "line" ? (
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 6 }}>
+                    <NumberField
+                      label="X"
+                      value={selectedElement.x}
+                      min={0}
+                      handleNumberFieldArrow={handleNumberFieldArrow}
+                      onChange={(next) => updateElement(selectedElement.id, { x: next })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <NumberField
+                      label="Y"
+                      value={selectedElement.y}
+                      min={0}
+                      handleNumberFieldArrow={handleNumberFieldArrow}
+                      onChange={(next) => updateElement(selectedElement.id, { y: next })}
+                    />
+                  </Grid>
                 </Grid>
-                <Grid size={{ xs: 6 }}>
-                  <NumberField
-                    label="Y"
-                    value={selectedElement.y}
-                    min={0}
-                    handleNumberFieldArrow={handleNumberFieldArrow}
-                    onChange={(next) => updateElement(selectedElement.id, { y: next })}
-                  />
-                </Grid>
-              </Grid>
+              ) : null}
 
               {selectedElement.type === "text" ? (
                 <TextElementEditor

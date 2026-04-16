@@ -130,6 +130,8 @@ export type PreviewCommand =
       width: number;
       height: number;
       text: string;
+      barcodeType: BarcodeElement["barcodeType"];
+      moduleWidth: number;
       humanReadable: boolean;
     };
 

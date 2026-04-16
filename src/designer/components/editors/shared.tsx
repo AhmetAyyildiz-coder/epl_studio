@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Grid, MenuItem, TextField } from "@mui/material";
 import type { TextFieldProps } from "@mui/material/TextField";
 import { FIELD_LABELS } from "../../constants";
@@ -71,10 +71,30 @@ export function NumberField({
   onChange,
 }: NumberFieldProps) {
   const [localValue, setLocalValue] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setLocalValue(String(value));
   }, [value]);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      if (document.activeElement === input) {
+        event.preventDefault();
+      }
+    };
+
+    input.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      input.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   useEffect(() => {
     const trimmedValue = localValue.trim();
@@ -112,6 +132,7 @@ export function NumberField({
     <TextField
       label={label}
       type="number"
+      inputRef={inputRef}
       value={localValue}
       helperText={helperText}
       onChange={(event) => setLocalValue(event.target.value)}

@@ -1,4 +1,4 @@
-import { MenuItem, TextField } from "@mui/material";
+import { Alert, MenuItem, TextField } from "@mui/material";
 import type { LineElement, NumberFieldArrowHandler, UpdateElementFn } from "../../types";
 import { NumberField, TwoColumnFields } from "./shared";
 
@@ -9,8 +9,40 @@ type LineElementEditorProps = {
 };
 
 export function LineElementEditor({ element, updateElement, handleNumberFieldArrow }: LineElementEditorProps) {
+  const endX = element.x + element.width;
+  const endY = element.y + element.height;
+
+  const updateHorizontalStart = (nextX: number) => {
+    const safeNextX = Math.min(nextX, Math.max(0, endX - 1));
+    updateElement(element.id, {
+      x: safeNextX,
+      width: Math.max(1, endX - safeNextX),
+    });
+  };
+
+  const updateHorizontalEnd = (nextEndX: number) => {
+    const safeEndX = Math.max(element.x + 1, nextEndX);
+    updateElement(element.id, { width: Math.max(1, safeEndX - element.x) });
+  };
+
+  const updateVerticalStart = (nextY: number) => {
+    const safeNextY = Math.min(nextY, Math.max(0, endY - 1));
+    updateElement(element.id, {
+      y: safeNextY,
+      height: Math.max(1, endY - safeNextY),
+    });
+  };
+
+  const updateVerticalEnd = (nextEndY: number) => {
+    const safeEndY = Math.max(element.y + 1, nextEndY);
+    updateElement(element.id, { height: Math.max(1, safeEndY - element.y) });
+  };
+
   return (
     <>
+      <Alert severity="info" sx={{ borderRadius: 0 }}>
+        Cizgiler icin baslangic ve bitis koordinatlari ayridir. Boylece yatayda sag ucu, dikeyde alt ucu ayri kontrol edebilirsiniz.
+      </Alert>
       <TextField
         select
         label="Yon"
@@ -30,20 +62,61 @@ export function LineElementEditor({ element, updateElement, handleNumberFieldArr
       <TwoColumnFields
         left={
           <NumberField
-            label={element.orientation === "horizontal" ? "Uzunluk" : "Kalinlik"}
-            value={element.width}
-            min={1}
+            label={element.orientation === "horizontal" ? "Baslangic X" : "X"}
+            value={element.x}
+            min={0}
             handleNumberFieldArrow={handleNumberFieldArrow}
-            onChange={(next) => updateElement(element.id, { width: next })}
+            onChange={(next) => {
+              if (element.orientation === "horizontal") {
+                updateHorizontalStart(next);
+                return;
+              }
+
+              updateElement(element.id, { x: next });
+            }}
           />
         }
         right={
           <NumberField
-            label={element.orientation === "vertical" ? "Uzunluk" : "Kalinlik"}
-            value={element.height}
+            label={element.orientation === "horizontal" ? "Bitis X" : "Baslangic Y"}
+            value={element.orientation === "horizontal" ? endX : element.y}
+            min={0}
+            handleNumberFieldArrow={handleNumberFieldArrow}
+            onChange={(next) => {
+              if (element.orientation === "horizontal") {
+                updateHorizontalEnd(next);
+                return;
+              }
+
+              updateVerticalStart(next);
+            }}
+          />
+        }
+      />
+      <TwoColumnFields
+        left={
+          <NumberField
+            label={element.orientation === "horizontal" ? "Y" : "Bitis Y"}
+            value={element.orientation === "horizontal" ? element.y : endY}
+            min={0}
+            handleNumberFieldArrow={handleNumberFieldArrow}
+            onChange={(next) => {
+              if (element.orientation === "horizontal") {
+                updateElement(element.id, { y: next });
+                return;
+              }
+
+              updateVerticalEnd(next);
+            }}
+          />
+        }
+        right={
+          <NumberField
+            label="Kalinlik"
+            value={element.orientation === "horizontal" ? element.height : element.width}
             min={1}
             handleNumberFieldArrow={handleNumberFieldArrow}
-            onChange={(next) => updateElement(element.id, { height: next })}
+            onChange={(next) => updateElement(element.id, element.orientation === "horizontal" ? { height: next } : { width: next })}
           />
         }
       />

@@ -41,8 +41,8 @@ export function BarcodeElementEditor({
             value={element.barcodeType}
             onChange={(event) => updateElement(element.id, { barcodeType: event.target.value as BarcodeElement["barcodeType"] })}
           >
-            <MenuItem value="1">Code128</MenuItem>
-            <MenuItem value="3">Code39</MenuItem>
+            <MenuItem value="1">Kod 128</MenuItem>
+            <MenuItem value="3">Kod 39</MenuItem>
           </TextField>
         }
         right={
@@ -58,7 +58,7 @@ export function BarcodeElementEditor({
       <TwoColumnFields
         left={
           <NumberField
-            label="Narrow"
+            label="Dar Cubuk"
             value={element.narrow}
             min={1}
             handleNumberFieldArrow={handleNumberFieldArrow}
@@ -67,7 +67,7 @@ export function BarcodeElementEditor({
         }
         right={
           <NumberField
-            label="Wide"
+            label="Genis Cubuk"
             value={element.wide}
             min={2}
             handleNumberFieldArrow={handleNumberFieldArrow}

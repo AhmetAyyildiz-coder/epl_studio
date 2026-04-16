@@ -1,8 +1,8 @@
-import { memo, useMemo } from "react";
-import { Box, Typography } from "@mui/material";
+import { memo } from "react";
+import { Box } from "@mui/material";
+import Barcode from "react-barcode";
 import { Rnd } from "react-rnd";
 import { DEFAULT_PREVIEW_ZOOM, DOTS_PER_MM, LABEL_HEIGHT_DOTS, LABEL_WIDTH_DOTS, PREVIEW_SCALE } from "../constants";
-import { generateCode39Bars } from "../utils";
 import type { PreviewCommand } from "../types";
 
 type ElementPreviewProps = {
@@ -55,7 +55,7 @@ function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
   }
 
   if (previous.type === "barcode" && next.type === "barcode") {
-    return previous.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height && previous.text === next.text && previous.humanReadable === next.humanReadable;
+    return previous.x === next.x && previous.y === next.y && previous.width === next.width && previous.height === next.height && previous.text === next.text && previous.barcodeType === next.barcodeType && previous.moduleWidth === next.moduleWidth && previous.humanReadable === next.humanReadable;
   }
 
   return false;
@@ -64,7 +64,6 @@ function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
 const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSelect, onMove }: PreviewItemProps) {
   const stroke = selected ? "#bf360c" : "rgba(0,77,64,0.22)";
   const fill = selected ? "rgba(191,54,12,0.08)" : "rgba(0,77,64,0.04)";
-  const barcodeBars = useMemo(() => (command.type === "barcode" ? generateCode39Bars(command.text, 2, 4) : []), [command]);
 
   if (command.type === "text") {
     const anchorLeft =
@@ -245,36 +244,29 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
           border: `1px dashed ${stroke}`,
           cursor: "grab",
           overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          "& svg": {
+            display: "block",
+            maxWidth: "100%",
+          },
+          "& text": {
+            fontFamily: "monospace !important",
+          },
         }}
       >
-        {barcodeBars.map((bar) => (
-          <Box
-            key={`${command.id}-${bar.x}-${bar.width}`}
-            sx={{
-              position: "absolute",
-              left: bar.x,
-              top: 8,
-              width: bar.width,
-              height: command.height - (command.humanReadable ? 28 : 16),
-              bgcolor: "#111",
-            }}
-          />
-        ))}
-        {command.humanReadable ? (
-          <Typography
-            sx={{
-              position: "absolute",
-              left: 8,
-              right: 8,
-              bottom: 4,
-              fontFamily: "monospace",
-              fontSize: 14,
-              lineHeight: 1,
-            }}
-          >
-            {command.text}
-          </Typography>
-        ) : null}
+        <Barcode
+          value={command.text.trim() || " "}
+          format={command.barcodeType === "1" ? "CODE128" : "CODE39"}
+          renderer="svg"
+          height={Math.max(24, command.height - (command.humanReadable ? 24 : 8))}
+          width={Math.max(1, command.moduleWidth * 0.6)}
+          margin={0}
+          displayValue={command.humanReadable}
+          background="transparent"
+          lineColor="#111111"
+        />
       </Box>
     </Rnd>
   );

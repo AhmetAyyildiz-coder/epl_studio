@@ -35,14 +35,14 @@ export function BlackBoxElementEditor({
       />
       <TextField
         select
-        label="Font"
+        label="Yazi Tipi"
         value={element.font}
         onChange={(event) => updateElement(element.id, { font: Number((event.target as HTMLInputElement).value) as BlackBoxElement["font"] })}
       >
-        <MenuItem value={1}>Font 1</MenuItem>
-        <MenuItem value={2}>Font 2</MenuItem>
-        <MenuItem value={3}>Font 3</MenuItem>
-        <MenuItem value={4}>Font 4</MenuItem>
+        <MenuItem value={1}>Yazi Tipi 1</MenuItem>
+        <MenuItem value={2}>Yazi Tipi 2</MenuItem>
+        <MenuItem value={3}>Yazi Tipi 3</MenuItem>
+        <MenuItem value={4}>Yazi Tipi 4</MenuItem>
       </TextField>
       <TwoColumnFields
         left={
