@@ -1,4 +1,5 @@
 import type { CanvasElement, LayoutDraft } from "../designer/types";
+import { buildReactTemplate } from "../designer/utils";
 
 const ETIKET_SABLONU_API_BASE_URL = "http://localhost:5105/api/common/etiket-sablonu";
 
@@ -15,6 +16,7 @@ type EtiketSablonuDTO = {
   kisaKod: string | null;
   sablonAdi: string | null;
   sablonIcerik: string | null;
+  sablonReactIcerik?: string | null;
   kayitTarihi: string;
   kaydedenKullaniciId: number;
   guncellemeTarihi: string | null;
@@ -31,6 +33,7 @@ type CreateEtiketSablonuRequest = {
   kisaKod: string;
   sablonAdi: string;
   sablonIcerik: string;
+  sablonReactIcerik: string;
 };
 
 type CreateEtiketSablonuResponse = {
@@ -45,6 +48,7 @@ type UpdateEtiketSablonuRequest = {
   kisaKod: string;
   sablonAdi: string;
   sablonIcerik: string;
+  sablonReactIcerik: string;
 };
 
 type UpdateEtiketSablonuResponse = {
@@ -155,6 +159,7 @@ export function toLayoutDraft(dto: EtiketSablonuDTO): LayoutDraft {
     templateId: dto.id,
     shortCode: dto.kisaKod ?? "",
     name: dto.sablonAdi ?? "Adsiz Taslak",
+    reactContent: dto.sablonReactIcerik ?? null,
     elements: deserializeLayoutElements(dto.sablonIcerik),
   };
 }
@@ -164,6 +169,7 @@ export function buildCreateEtiketSablonuRequest(layout: LayoutDraft): CreateEtik
     kisaKod: layout.shortCode.trim(),
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
+    sablonReactIcerik: buildReactTemplate(layout),
   };
 }
 
@@ -177,6 +183,7 @@ export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft): UpdateEtik
     kisaKod: layout.shortCode.trim(),
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
+    sablonReactIcerik: buildReactTemplate(layout),
   };
 }
 

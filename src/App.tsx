@@ -26,6 +26,7 @@ import {
   applyEplOffset,
   buildEpl,
   buildPreviewCommands,
+  buildReactTemplate,
   createElementByType,
   emptyLayout,
   normalizeRecords,
@@ -165,6 +166,10 @@ export default function App() {
 
     return deferredSelectedRecordIndexes.map((index) => buildEpl(deferredEplDraft, records[index], 0, 0)).join("");
   }, [deferredEplDraft, records, deferredSelectedRecordIndexes]);
+  const currentReactTemplate = useMemo(
+    () => buildReactTemplate(draft),
+    [draft.elements, draft.name, draft.shortCode],
+  );
 
   // Edited EPL state - kullanıcı manuel düzenleme yaptığında kullanılır
   const [editedEpl, setEditedEpl] = useState<string>("");
@@ -498,6 +503,20 @@ export default function App() {
     }
   }, [currentEpl, setMessageOptimized]);
 
+  const copyReactTemplateToClipboard = useCallback(async () => {
+    if (!currentReactTemplate) {
+      setMessageOptimized("Kopyalanacak React/HTML sablonu yok.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentReactTemplate);
+      setMessageOptimized("React/HTML sablonu panoya kopyalandi.");
+    } catch (error) {
+      setMessageOptimized(`React/HTML sablonu kopyalanamadi: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`);
+    }
+  }, [currentReactTemplate, setMessageOptimized]);
+
   const applyEditedEplToPreview = useCallback(() => {
     const parsed = parseEplToElements(currentEpl, printOffsetX, printOffsetY);
     if (!parsed.length) {
@@ -689,6 +708,7 @@ export default function App() {
                 printOffsetX={printOffsetX}
                 printOffsetY={printOffsetY}
                 currentEpl={currentEpl}
+                currentReactTemplate={currentReactTemplate}
                 editedEpl={editedEpl}
                 records={records}
                 onSetPreviewZoom={(zoom) => setPreviewZoom(zoom)}
@@ -699,6 +719,7 @@ export default function App() {
                 onMoveElement={moveElement}
                 onApplyEpl={applyEditedEplToPreview}
                 onCopyEpl={copyEplToClipboard}
+                onCopyReactTemplate={copyReactTemplateToClipboard}
                 handleNumberFieldArrow={handleNumberFieldArrow}
               />
             </Stack>

@@ -29,6 +29,7 @@ interface CanvasPanelProps {
   printOffsetX: number;
   printOffsetY: number;
   currentEpl: string;
+  currentReactTemplate: string;
   editedEpl: string;
   records: DataRecord[];
   onSetPreviewZoom: (zoom: number) => void;
@@ -39,6 +40,7 @@ interface CanvasPanelProps {
   onMoveElement: (id: string, x: number, y: number) => void;
   onApplyEpl: () => void;
   onCopyEpl: () => void;
+  onCopyReactTemplate: () => void;
   handleNumberFieldArrow: NumberFieldArrowHandler;
 }
 
@@ -50,6 +52,7 @@ export function CanvasPanel({
   printOffsetX,
   printOffsetY,
   currentEpl,
+  currentReactTemplate,
   editedEpl,
   records,
   onSetPreviewZoom,
@@ -60,6 +63,7 @@ export function CanvasPanel({
   onMoveElement,
   onApplyEpl,
   onCopyEpl,
+  onCopyReactTemplate,
   handleNumberFieldArrow,
 }: CanvasPanelProps) {
   const datasetKeys = useMemo(
@@ -90,6 +94,11 @@ export function CanvasPanel({
               <MenuItem value="1.5">150%</MenuItem>
               <MenuItem value="1.75">175%</MenuItem>
               <MenuItem value="2">200%</MenuItem>
+              <MenuItem value="2.25">225%</MenuItem>
+              <MenuItem value="2.5">250%</MenuItem>
+              <MenuItem value="3">300%</MenuItem>
+              <MenuItem value="3.5">350%</MenuItem>
+              <MenuItem value="4">400%</MenuItem>
             </TextField>
             <TextField
               size="small"
@@ -157,6 +166,39 @@ export function CanvasPanel({
           />
           <Alert severity="info" sx={{ borderRadius: 0 }}>
             EPL ciktisi taslaktan otomatik uretilir. Elle degisiklik yapabilirsiniz; taslak/veri degistiginde otomatik guncellenir.
+          </Alert>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }}>
+            <Typography variant="h6">React / HTML Sablonu</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" onClick={onCopyReactTemplate} disabled={!currentReactTemplate.trim()}>
+                Kopyala
+              </Button>
+            </Stack>
+          </Stack>
+          <TextField
+            multiline
+            minRows={10}
+            maxRows={18}
+            value={currentReactTemplate}
+            slotProps={{
+              htmlInput: { readOnly: true },
+            }}
+            placeholder="React / HTML sablonu burada gosterilecek..."
+            sx={{
+              "& .MuiInputBase-input": {
+                fontFamily: "monospace",
+                fontSize: 13,
+                whiteSpace: "pre",
+              },
+            }}
+          />
+          <Alert severity="info" sx={{ borderRadius: 0 }}>
+            Veritabanina gidecek sade sablon budur. Dinamik alanlar {"{{alan_adi}}"} olarak, barkod ise epl-barcode etiketiyle kaydedilir.
           </Alert>
         </Stack>
       </Paper>

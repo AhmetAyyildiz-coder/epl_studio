@@ -383,6 +383,175 @@ export function estimateWrappedTextWidth(lines: string[], fontSize: number, wrap
   return bold ? Math.round(baseWidth * 1.6) : baseWidth;
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function styleToString(style: Record<string, string | number | boolean | undefined>) {
+  return Object.entries(style)
+    .filter(([, value]) => value !== undefined && value !== false)
+    .map(([key, value]) => {
+      const cssKey = key.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+      return `${cssKey}:${String(value)}`;
+    })
+    .join(";");
+}
+
+function getTemplatePlaceholder(binding: string) {
+  const normalized = binding.trim();
+  return normalized ? `{{${normalized}}}` : "";
+}
+
+function getTextTemplateContent(element: TextElement) {
+  const placeholder = getTemplatePlaceholder(element.binding);
+  if (placeholder) {
+    return placeholder;
+  }
+
+  return element.staticText || element.label;
+}
+
+function getBlackBoxTemplateContent(element: BlackBoxElement) {
+  return getTemplatePlaceholder(element.binding) || element.staticText;
+}
+
+function getBarcodeTemplateContent(element: BarcodeElement) {
+  return getTemplatePlaceholder(element.binding) || element.staticText || "BARCODE";
+}
+
+function getTextTemplateLeft(element: TextElement) {
+  if (element.align === "right") {
+    return Math.max(0, element.x - element.wrapWidth);
+  }
+
+  if (element.align === "center") {
+    return Math.max(0, element.x - Math.round(element.wrapWidth / 2));
+  }
+
+  return element.x;
+}
+
+function renderTemplateTextElement(element: TextElement) {
+  const fontSize = FONT_HEIGHT_MAP[element.font];
+  const lineHeight = fontSize + 4;
+  const minHeight = Math.max(lineHeight, element.maxLines * lineHeight);
+  const content = escapeHtml(getTextTemplateContent(element));
+
+  return `<div data-epl-type="text"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} style="${styleToString({
+    position: "absolute",
+    left: `${getTextTemplateLeft(element)}px`,
+    top: `${element.y}px`,
+    width: `${element.wrapWidth}px`,
+    minHeight: `${minHeight}px`,
+    color: element.reverse ? "#ffffff" : "#111111",
+    background: element.reverse ? "#111111" : "transparent",
+    fontFamily: "monospace",
+    fontSize: `${fontSize}px`,
+    fontWeight: element.bold ? 700 : 400,
+    lineHeight: `${lineHeight}px`,
+    whiteSpace: "pre-wrap",
+    textAlign: element.align,
+    overflow: "hidden",
+    boxSizing: "border-box",
+  })}">${content}</div>`;
+}
+
+function renderTemplateBlackBoxElement(element: BlackBoxElement) {
+  const { fontSize, width, height } = getBlackBoxMetrics(element);
+  const content = escapeHtml(getBlackBoxTemplateContent(element));
+
+  return `<div data-epl-type="blackBox"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} style="${styleToString({
+    position: "absolute",
+    left: `${element.x}px`,
+    top: `${element.y}px`,
+    width: `${width}px`,
+    height: `${height}px`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: `0 ${BLACK_BOX_AUTO_HORIZONTAL_PADDING}px`,
+    background: "#111111",
+    color: "#ffffff",
+    fontFamily: "monospace",
+    fontSize: `${fontSize}px`,
+    lineHeight: 1,
+    textAlign: "center",
+    overflow: "hidden",
+    whiteSpace: "nowrap",
+    boxSizing: "border-box",
+  })}">${content}</div>`;
+}
+
+function renderTemplateLineElement(element: LineElement) {
+  return `<div data-epl-type="line" style="${styleToString({
+    position: "absolute",
+    left: `${element.x}px`,
+    top: `${element.y}px`,
+    width: `${element.width}px`,
+    height: `${element.height}px`,
+    background: "#111111",
+  })}"></div>`;
+}
+
+function renderTemplateBoxElement(element: BoxElement) {
+  return `<div data-epl-type="box" style="${styleToString({
+    position: "absolute",
+    left: `${element.x}px`,
+    top: `${element.y}px`,
+    width: `${element.width}px`,
+    height: `${element.height}px`,
+    border: `${element.thickness}px solid #111111`,
+    boxSizing: "border-box",
+  })}"></div>`;
+}
+
+function renderTemplateBarcodeElement(element: BarcodeElement) {
+  const content = escapeHtml(getBarcodeTemplateContent(element));
+  const format = element.barcodeType === "1" ? "CODE128" : "CODE39";
+  const previewWidth = barcodePreviewWidth(element.binding.trim() || element.staticText || "BARCODE", element.narrow, element.wide);
+
+  return `<epl-barcode data-epl-type="barcode"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} data-value="${content}" data-format="${format}" data-module-width="${element.narrow}" data-wide-width="${element.wide}" data-height="${element.height}" data-display-value="${element.humanReadable ? "true" : "false"}" style="${styleToString({
+    position: "absolute",
+    left: `${element.x}px`,
+    top: `${element.y}px`,
+    width: `${previewWidth}px`,
+    height: `${element.height}px`,
+    display: "block",
+    overflow: "hidden",
+  })}">${content}</epl-barcode>`;
+}
+
+export function buildReactTemplate(layout: LayoutDraft) {
+  const children = layout.elements.map((element) => {
+    switch (element.type) {
+      case "text":
+        return renderTemplateTextElement(element);
+      case "blackBox":
+        return renderTemplateBlackBoxElement(element);
+      case "line":
+        return renderTemplateLineElement(element);
+      case "box":
+        return renderTemplateBoxElement(element);
+      case "barcode":
+        return renderTemplateBarcodeElement(element);
+    }
+  }).join("\n");
+
+  return `<div data-epl-template="true" data-template-name="${escapeHtml(layout.name)}" data-template-short-code="${escapeHtml(layout.shortCode)}" style="${styleToString({
+    position: "relative",
+    width: `${LABEL_WIDTH_DOTS}px`,
+    height: `${LABEL_HEIGHT_DOTS}px`,
+    overflow: "hidden",
+    background: "#fffdfa",
+    boxSizing: "border-box",
+  })}">\n${children}\n</div>`;
+}
+
 function getBlackBoxTextMetrics(text: string, font: TextFont) {
   const fontSize = BLACK_BOX_FONT_HEIGHT_MAP[font];
   const textWidth = Math.max(BLACK_BOX_FONT_WIDTH_MAP[font], text.length * BLACK_BOX_FONT_WIDTH_MAP[font]);

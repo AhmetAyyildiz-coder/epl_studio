@@ -69,6 +69,7 @@ export type LayoutDraft = {
   templateId?: number | null;
   shortCode: string;
   name: string;
+  reactContent?: string | null;
   elements: CanvasElement[];
 };
 
