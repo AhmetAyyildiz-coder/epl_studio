@@ -28,12 +28,25 @@ type GetEtiketSablonuResponse = {
   count: number;
 };
 
+export type EtiketSablonuMetadata = {
+  dpi: number;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  offsetXDot: number;
+  offsetYDot: number;
+};
+
 type CreateEtiketSablonuRequest = {
   logId?: string | null;
   kisaKod: string;
   sablonAdi: string;
   sablonIcerik: string;
   sablonReactIcerik: string;
+  dpi: number;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  offsetXDot: number;
+  offsetYDot: number;
 };
 
 type CreateEtiketSablonuResponse = {
@@ -49,6 +62,11 @@ type UpdateEtiketSablonuRequest = {
   sablonAdi: string;
   sablonIcerik: string;
   sablonReactIcerik: string;
+  dpi: number;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  offsetXDot: number;
+  offsetYDot: number;
 };
 
 type UpdateEtiketSablonuResponse = {
@@ -164,16 +182,21 @@ export function toLayoutDraft(dto: EtiketSablonuDTO): LayoutDraft {
   };
 }
 
-export function buildCreateEtiketSablonuRequest(layout: LayoutDraft): CreateEtiketSablonuRequest {
+export function buildCreateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata): CreateEtiketSablonuRequest {
   return {
     kisaKod: layout.shortCode.trim(),
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
     sablonReactIcerik: buildReactTemplate(layout),
+    dpi: metadata.dpi,
+    labelWidthMm: metadata.labelWidthMm,
+    labelHeightMm: metadata.labelHeightMm,
+    offsetXDot: metadata.offsetXDot,
+    offsetYDot: metadata.offsetYDot,
   };
 }
 
-export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft): UpdateEtiketSablonuRequest {
+export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata): UpdateEtiketSablonuRequest {
   if (!layout.templateId) {
     throw new Error("Guncelleme icin templateId gerekli.");
   }
@@ -184,6 +207,11 @@ export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft): UpdateEtik
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
     sablonReactIcerik: buildReactTemplate(layout),
+    dpi: metadata.dpi,
+    labelWidthMm: metadata.labelWidthMm,
+    labelHeightMm: metadata.labelHeightMm,
+    offsetXDot: metadata.offsetXDot,
+    offsetYDot: metadata.offsetYDot,
   };
 }
 
@@ -207,24 +235,24 @@ export async function listEtiketSablonlari(query?: EtiketSablonuListQuery) {
   };
 }
 
-export async function createEtiketSablonu(layout: LayoutDraft) {
+export async function createEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata) {
   const response = await request<GeneralResponseDTO<CreateEtiketSablonuResponse>>(
     buildUrl("/ekle"),
     {
       method: "POST",
-      body: JSON.stringify(buildCreateEtiketSablonuRequest(layout)),
+      body: JSON.stringify(buildCreateEtiketSablonuRequest(layout, metadata)),
     },
   );
 
   return response;
 }
 
-export async function updateEtiketSablonu(layout: LayoutDraft) {
+export async function updateEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata) {
   const response = await request<GeneralResponseDTO<UpdateEtiketSablonuResponse>>(
     buildUrl("/guncelle"),
     {
       method: "PUT",
-      body: JSON.stringify(buildUpdateEtiketSablonuRequest(layout)),
+      body: JSON.stringify(buildUpdateEtiketSablonuRequest(layout, metadata)),
     },
   );
 

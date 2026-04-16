@@ -10,9 +10,12 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  DEFAULT_DPI,
   DEFAULT_PREVIEW_ZOOM,
   DEFAULT_PRINT_OFFSET_X,
   DEFAULT_PRINT_OFFSET_Y,
+  LABEL_HEIGHT_MM,
+  LABEL_WIDTH_MM,
   SAMPLE_DATA_JSON,
   STORAGE_KEY,
 } from "./designer/constants";
@@ -35,7 +38,7 @@ import {
   submitEpl,
   uid,
 } from "./designer/utils";
-import { createEtiketSablonu, listEtiketSablonlari, updateEtiketSablonu } from "./services/etiketSablonuService";
+import { createEtiketSablonu, listEtiketSablonlari, updateEtiketSablonu, type EtiketSablonuMetadata } from "./services/etiketSablonuService";
 import type { CanvasElement, DataSourceConfig, ElementType, LayoutDraft, NumberFieldArrowHandler } from "./designer/types";
 
 type RemoteLayoutFilters = {
@@ -170,6 +173,13 @@ export default function App() {
     () => buildReactTemplate(draft),
     [draft.elements, draft.name, draft.shortCode],
   );
+  const currentTemplateMetadata = useMemo<EtiketSablonuMetadata>(() => ({
+    dpi: DEFAULT_DPI,
+    labelWidthMm: LABEL_WIDTH_MM,
+    labelHeightMm: LABEL_HEIGHT_MM,
+    offsetXDot: printOffsetX,
+    offsetYDot: printOffsetY,
+  }), [printOffsetX, printOffsetY]);
 
   // Edited EPL state - kullanıcı manuel düzenleme yaptığında kullanılır
   const [editedEpl, setEditedEpl] = useState<string>("");
@@ -274,8 +284,8 @@ export default function App() {
       setIsSavingLayout(true);
       try {
         const response = draft.templateId
-          ? await updateEtiketSablonu(draft)
-          : await createEtiketSablonu(draft);
+          ? await updateEtiketSablonu(draft, currentTemplateMetadata)
+          : await createEtiketSablonu(draft, currentTemplateMetadata);
 
         const persistedLayout: LayoutDraft = {
           ...draft,
@@ -305,7 +315,7 @@ export default function App() {
         setIsSavingLayout(false);
       }
     })();
-  }, [draft, setMessageOptimized]);
+  }, [currentTemplateMetadata, draft, setMessageOptimized]);
 
   const duplicateLayout = useCallback(() => {
     setDraft((prev) => {
