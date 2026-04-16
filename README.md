@@ -119,8 +119,8 @@ Ornek:
 
 ```html
 <div data-epl-template="true">
-  <div data-epl-type="text" data-binding="karakterKod">{{karakterKod}}</div>
-  <epl-barcode data-epl-type="barcode" data-binding="isEmriId">{{isEmriId}}</epl-barcode>
+  <div data-epl-type="text" data-binding="karakterKod" data-placeholder="{{karakterKod}}"></div>
+  <epl-barcode data-epl-type="barcode" data-binding="isEmriId" data-value="{{isEmriId}}"></epl-barcode>
 </div>
 ```
 
@@ -128,19 +128,19 @@ Bu veri sablon_react_icerik kolonunda tutulur.
 
 ## Placeholder Yapisi
 
-Dinamik alanlar template icinde su formatta yazilir:
+Dinamik alanlar template icinde gorunur icerik yerine attribute olarak saklanir:
 
 ```txt
-{{alan_adi}}
+data-placeholder="{{alan_adi}}"
 ```
 
 Ornekler:
 
-- {{karakterKod}}
-- {{musteri}}
-- {{isEmriId}}
+- data-placeholder="{{karakterKod}}"
+- data-placeholder="{{musteri}}"
+- data-value="{{isEmriId}}"
 
-Bu format sayesinde template farkli uygulamalarda kolayca parse edilip veriyle doldurulabilir.
+Bu yapi sayesinde template ham haliyle acildiginda tasarim bozulmaz; veri baglama bilgisi de kaybolmadan farkli uygulamalarda kolayca parse edilip doldurulabilir.
 
 ## Barkod Modeli
 

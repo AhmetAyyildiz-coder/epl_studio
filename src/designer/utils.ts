@@ -408,20 +408,19 @@ function getTemplatePlaceholder(binding: string) {
 }
 
 function getTextTemplateContent(element: TextElement) {
-  const placeholder = getTemplatePlaceholder(element.binding);
-  if (placeholder) {
-    return placeholder;
-  }
-
   return element.staticText || element.label;
 }
 
 function getBlackBoxTemplateContent(element: BlackBoxElement) {
-  return getTemplatePlaceholder(element.binding) || element.staticText;
+  return element.staticText;
 }
 
 function getBarcodeTemplateContent(element: BarcodeElement) {
-  return getTemplatePlaceholder(element.binding) || element.staticText || "BARCODE";
+  return element.staticText || "BARCODE";
+}
+
+function getTemplateVisibleContent(binding: string, fallback: string) {
+  return binding.trim() ? "" : fallback;
 }
 
 function getTextTemplateLeft(element: TextElement) {
@@ -440,9 +439,10 @@ function renderTemplateTextElement(element: TextElement) {
   const fontSize = FONT_HEIGHT_MAP[element.font];
   const lineHeight = fontSize + 4;
   const minHeight = Math.max(lineHeight, element.maxLines * lineHeight);
-  const content = escapeHtml(getTextTemplateContent(element));
+  const placeholder = getTemplatePlaceholder(element.binding);
+  const content = escapeHtml(getTemplateVisibleContent(element.binding, getTextTemplateContent(element)));
 
-  return `<div data-epl-type="text"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} style="${styleToString({
+  return `<div data-epl-type="text"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}" data-placeholder="${escapeHtml(placeholder)}"` : ""} style="${styleToString({
     position: "absolute",
     left: `${getTextTemplateLeft(element)}px`,
     top: `${element.y}px`,
@@ -454,23 +454,26 @@ function renderTemplateTextElement(element: TextElement) {
     fontSize: `${fontSize}px`,
     fontWeight: element.bold ? 700 : 400,
     lineHeight: `${lineHeight}px`,
-    whiteSpace: "pre-wrap",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
     textAlign: element.align,
     overflow: "hidden",
     boxSizing: "border-box",
   })}">${content}</div>`;
 }
 
-function renderTemplateBlackBoxElement(element: BlackBoxElement) {
-  const { fontSize, width, height } = getBlackBoxMetrics(element);
-  const content = escapeHtml(getBlackBoxTemplateContent(element));
+function renderTemplateBlackBoxElement(element: BlackBoxElement, record?: DataRecord) {
+  const { fontSize } = getBlackBoxMetrics(element);
+  const placeholder = getTemplatePlaceholder(element.binding);
+  const { width: resolvedWidth, height: resolvedHeight } = getBlackBoxMetrics(element, record);
+  const content = escapeHtml(getTemplateVisibleContent(element.binding, getBlackBoxTemplateContent(element)));
 
-  return `<div data-epl-type="blackBox"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} style="${styleToString({
+  return `<div data-epl-type="blackBox"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}" data-placeholder="${escapeHtml(placeholder)}"` : ""} style="${styleToString({
     position: "absolute",
     left: `${element.x}px`,
     top: `${element.y}px`,
-    width: `${width}px`,
-    height: `${height}px`,
+    width: `${resolvedWidth}px`,
+    height: `${resolvedHeight}px`,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -510,12 +513,14 @@ function renderTemplateBoxElement(element: BoxElement) {
   })}"></div>`;
 }
 
-function renderTemplateBarcodeElement(element: BarcodeElement) {
-  const content = escapeHtml(getBarcodeTemplateContent(element));
+function renderTemplateBarcodeElement(element: BarcodeElement, record?: DataRecord) {
+  const placeholder = getTemplatePlaceholder(element.binding);
+  const content = escapeHtml(getTemplateVisibleContent(element.binding, getBarcodeTemplateContent(element)));
   const format = element.barcodeType === "1" ? "CODE128" : "CODE39";
-  const previewWidth = barcodePreviewWidth(element.binding.trim() || element.staticText || "BARCODE", element.narrow, element.wide);
+  const measuredValue = toAscii(resolveBinding(record, element.binding, element.staticText || "BARCODE"));
+  const previewWidth = barcodePreviewWidth(measuredValue, element.narrow, element.wide);
 
-  return `<epl-barcode data-epl-type="barcode"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}"` : ""} data-value="${content}" data-format="${format}" data-module-width="${element.narrow}" data-wide-width="${element.wide}" data-height="${element.height}" data-display-value="${element.humanReadable ? "true" : "false"}" style="${styleToString({
+  return `<epl-barcode data-epl-type="barcode"${element.binding.trim() ? ` data-binding="${escapeHtml(element.binding.trim())}" data-placeholder="${escapeHtml(placeholder)}"` : ""} data-value="${escapeHtml(placeholder || getBarcodeTemplateContent(element))}" data-format="${format}" data-module-width="${element.narrow}" data-wide-width="${element.wide}" data-height="${element.height}" data-display-value="${element.humanReadable ? "true" : "false"}" style="${styleToString({
     position: "absolute",
     left: `${element.x}px`,
     top: `${element.y}px`,
@@ -526,19 +531,19 @@ function renderTemplateBarcodeElement(element: BarcodeElement) {
   })}">${content}</epl-barcode>`;
 }
 
-export function buildReactTemplate(layout: LayoutDraft) {
+export function buildReactTemplate(layout: LayoutDraft, record?: DataRecord) {
   const children = layout.elements.map((element) => {
     switch (element.type) {
       case "text":
         return renderTemplateTextElement(element);
       case "blackBox":
-        return renderTemplateBlackBoxElement(element);
+        return renderTemplateBlackBoxElement(element, record);
       case "line":
         return renderTemplateLineElement(element);
       case "box":
         return renderTemplateBoxElement(element);
       case "barcode":
-        return renderTemplateBarcodeElement(element);
+        return renderTemplateBarcodeElement(element, record);
     }
   }).join("\n");
 

@@ -198,7 +198,7 @@ export function CanvasPanel({
             }}
           />
           <Alert severity="info" sx={{ borderRadius: 0 }}>
-            Veritabanina gidecek sade sablon budur. Dinamik alanlar {"{{alan_adi}}"} olarak, barkod ise epl-barcode etiketiyle kaydedilir.
+            Veritabanina gidecek sade sablon budur. Dinamik alanlar gorunur metin yerine data-binding ve data-placeholder alanlarinda tutulur; barkod degeri ise data-value uzerinden saklanir.
           </Alert>
         </Stack>
       </Paper>

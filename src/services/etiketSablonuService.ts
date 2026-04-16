@@ -1,4 +1,4 @@
-import type { CanvasElement, LayoutDraft } from "../designer/types";
+import type { CanvasElement, DataRecord, LayoutDraft } from "../designer/types";
 import { buildReactTemplate } from "../designer/utils";
 
 const ETIKET_SABLONU_API_BASE_URL = "http://localhost:5105/api/common/etiket-sablonu";
@@ -182,12 +182,12 @@ export function toLayoutDraft(dto: EtiketSablonuDTO): LayoutDraft {
   };
 }
 
-export function buildCreateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata): CreateEtiketSablonuRequest {
+export function buildCreateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata, previewRecord?: DataRecord): CreateEtiketSablonuRequest {
   return {
     kisaKod: layout.shortCode.trim(),
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
-    sablonReactIcerik: buildReactTemplate(layout),
+    sablonReactIcerik: buildReactTemplate(layout, previewRecord),
     dpi: metadata.dpi,
     labelWidthMm: metadata.labelWidthMm,
     labelHeightMm: metadata.labelHeightMm,
@@ -196,7 +196,7 @@ export function buildCreateEtiketSablonuRequest(layout: LayoutDraft, metadata: E
   };
 }
 
-export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata): UpdateEtiketSablonuRequest {
+export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft, metadata: EtiketSablonuMetadata, previewRecord?: DataRecord): UpdateEtiketSablonuRequest {
   if (!layout.templateId) {
     throw new Error("Guncelleme icin templateId gerekli.");
   }
@@ -206,7 +206,7 @@ export function buildUpdateEtiketSablonuRequest(layout: LayoutDraft, metadata: E
     kisaKod: layout.shortCode.trim(),
     sablonAdi: layout.name.trim(),
     sablonIcerik: serializeLayout(layout),
-    sablonReactIcerik: buildReactTemplate(layout),
+    sablonReactIcerik: buildReactTemplate(layout, previewRecord),
     dpi: metadata.dpi,
     labelWidthMm: metadata.labelWidthMm,
     labelHeightMm: metadata.labelHeightMm,
@@ -235,24 +235,24 @@ export async function listEtiketSablonlari(query?: EtiketSablonuListQuery) {
   };
 }
 
-export async function createEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata) {
+export async function createEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata, previewRecord?: DataRecord) {
   const response = await request<GeneralResponseDTO<CreateEtiketSablonuResponse>>(
     buildUrl("/ekle"),
     {
       method: "POST",
-      body: JSON.stringify(buildCreateEtiketSablonuRequest(layout, metadata)),
+      body: JSON.stringify(buildCreateEtiketSablonuRequest(layout, metadata, previewRecord)),
     },
   );
 
   return response;
 }
 
-export async function updateEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata) {
+export async function updateEtiketSablonu(layout: LayoutDraft, metadata: EtiketSablonuMetadata, previewRecord?: DataRecord) {
   const response = await request<GeneralResponseDTO<UpdateEtiketSablonuResponse>>(
     buildUrl("/guncelle"),
     {
       method: "PUT",
-      body: JSON.stringify(buildUpdateEtiketSablonuRequest(layout, metadata)),
+      body: JSON.stringify(buildUpdateEtiketSablonuRequest(layout, metadata, previewRecord)),
     },
   );
 

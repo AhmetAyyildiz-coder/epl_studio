@@ -170,8 +170,8 @@ export default function App() {
     return deferredSelectedRecordIndexes.map((index) => buildEpl(deferredEplDraft, records[index], 0, 0)).join("");
   }, [deferredEplDraft, records, deferredSelectedRecordIndexes]);
   const currentReactTemplate = useMemo(
-    () => buildReactTemplate(draft),
-    [draft.elements, draft.name, draft.shortCode],
+    () => buildReactTemplate(draft, activeRecord),
+    [activeRecord, draft.elements, draft.name, draft.shortCode],
   );
   const currentTemplateMetadata = useMemo<EtiketSablonuMetadata>(() => ({
     dpi: DEFAULT_DPI,
@@ -284,8 +284,8 @@ export default function App() {
       setIsSavingLayout(true);
       try {
         const response = draft.templateId
-          ? await updateEtiketSablonu(draft, currentTemplateMetadata)
-          : await createEtiketSablonu(draft, currentTemplateMetadata);
+          ? await updateEtiketSablonu(draft, currentTemplateMetadata, activeRecord)
+          : await createEtiketSablonu(draft, currentTemplateMetadata, activeRecord);
 
         const persistedLayout: LayoutDraft = {
           ...draft,
@@ -315,7 +315,7 @@ export default function App() {
         setIsSavingLayout(false);
       }
     })();
-  }, [currentTemplateMetadata, draft, setMessageOptimized]);
+  }, [activeRecord, currentTemplateMetadata, draft, setMessageOptimized]);
 
   const duplicateLayout = useCallback(() => {
     setDraft((prev) => {
