@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -634,18 +635,43 @@ export default function App() {
                 <Typography variant="caption" sx={{ fontWeight: 500 }}>Yükleniyor...</Typography>
               </Stack>
             )}
-            <Typography
-              variant="body2"
+            <Alert
+              severity={(() => {
+                const m = message.toLowerCase();
+                if (
+                  m.includes("kaydedilemedi") ||
+                  m.includes("yüklenemedi") ||
+                  m.includes("yuklenemedi") ||
+                  m.includes("geçersiz") ||
+                  m.includes("gecersiz") ||
+                  m.includes("kopyalanamadi") ||
+                  m.includes("engellendi") ||
+                  m.includes("hata")
+                ) {
+                  return "error";
+                }
+                if (
+                  m.includes("kaydedildi") ||
+                  m.includes("kopyalandi") ||
+                  m.includes("sifirlandi") ||
+                  m.includes("yazdirildi")
+                ) {
+                  return "success";
+                }
+                return "info";
+              })()}
+              variant="filled"
               sx={{
-                color: message.toLowerCase().includes("hata") ? "error.main" : "text.primary",
                 flex: 1,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                py: 0,
+                px: 1.5,
+                minHeight: 32,
+                "& .MuiAlert-message": { fontSize: "0.8125rem", fontWeight: 500 },
+                "& .MuiAlert-icon": { fontSize: 20, mr: 1, p: 0 },
               }}
             >
               {message}
-            </Typography>
+            </Alert>
           </Stack>
         </Paper>
 
