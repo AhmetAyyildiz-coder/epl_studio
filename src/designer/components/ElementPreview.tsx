@@ -21,6 +21,12 @@ type PreviewItemProps = {
   onMove: (id: string, x: number, y: number) => void;
 };
 
+const DRAG_STOP_THRESHOLD = 2;
+
+function hasMeaningfulDrag(deltaX: number, deltaY: number) {
+  return Math.abs(deltaX) > DRAG_STOP_THRESHOLD || Math.abs(deltaY) > DRAG_STOP_THRESHOLD;
+}
+
 function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
   if (previous.type !== next.type || previous.id !== next.id) {
     return false;
@@ -83,6 +89,10 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         dragGrid={[1, 1]}
         onDragStart={() => onSelect(command.id)}
         onDragStop={(_, data) => {
+          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+            return;
+          }
+
           const nextX =
             command.align === "right"
               ? data.x + command.width + 4
@@ -136,7 +146,13 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         enableResizing={false}
         dragGrid={[1, 1]}
         onDragStart={() => onSelect(command.id)}
-        onDragStop={(_, data) => onMove(command.id, data.x, data.y)}
+        onDragStop={(_, data) => {
+          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+            return;
+          }
+
+          onMove(command.id, data.x, data.y);
+        }}
         style={{ zIndex: selected ? 4 : 2 }}
       >
         <Box
@@ -178,7 +194,13 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         enableResizing={false}
         dragGrid={[1, 1]}
         onDragStart={() => onSelect(command.id)}
-        onDragStop={(_, data) => onMove(command.id, data.x, data.y)}
+        onDragStop={(_, data) => {
+          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+            return;
+          }
+
+          onMove(command.id, data.x, data.y);
+        }}
         style={{ zIndex: selected ? 4 : 2 }}
       >
         <Box
@@ -205,7 +227,13 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         enableResizing={false}
         dragGrid={[1, 1]}
         onDragStart={() => onSelect(command.id)}
-        onDragStop={(_, data) => onMove(command.id, data.x, data.y)}
+        onDragStop={(_, data) => {
+          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+            return;
+          }
+
+          onMove(command.id, data.x, data.y);
+        }}
         style={{ zIndex: selected ? 4 : 2 }}
       >
         <Box
@@ -231,7 +259,13 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
       enableResizing={false}
       dragGrid={[1, 1]}
       onDragStart={() => onSelect(command.id)}
-      onDragStop={(_, data) => onMove(command.id, data.x, data.y)}
+      onDragStop={(_, data) => {
+        if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+          return;
+        }
+
+        onMove(command.id, data.x, data.y);
+      }}
       style={{ zIndex: selected ? 4 : 2 }}
     >
       <Box
