@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { Box } from "@mui/material";
 import Barcode from "react-barcode";
 import { Rnd } from "react-rnd";
@@ -22,6 +22,11 @@ type PreviewItemProps = {
 };
 
 const DRAG_STOP_THRESHOLD = 2;
+
+type DragPosition = {
+  x: number;
+  y: number;
+};
 
 function hasMeaningfulDrag(deltaX: number, deltaY: number) {
   return Math.abs(deltaX) > DRAG_STOP_THRESHOLD || Math.abs(deltaY) > DRAG_STOP_THRESHOLD;
@@ -70,6 +75,23 @@ function isSamePreviewCommand(previous: PreviewCommand, next: PreviewCommand) {
 const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSelect, onMove }: PreviewItemProps) {
   const stroke = selected ? "#bf360c" : "rgba(0,77,64,0.22)";
   const fill = selected ? "rgba(191,54,12,0.08)" : "rgba(0,77,64,0.04)";
+  const dragStartPositionRef = useRef<DragPosition | null>(null);
+
+  const rememberDragStart = (position: DragPosition) => {
+    dragStartPositionRef.current = position;
+    onSelect(command.id);
+  };
+
+  const shouldCommitDrag = (position: DragPosition) => {
+    const startPosition = dragStartPositionRef.current;
+    dragStartPositionRef.current = null;
+
+    if (!startPosition) {
+      return false;
+    }
+
+    return hasMeaningfulDrag(position.x - startPosition.x, position.y - startPosition.y);
+  };
 
   if (command.type === "text") {
     const anchorLeft =
@@ -87,9 +109,9 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
-        onDragStart={() => onSelect(command.id)}
+        onDragStart={(_, data) => rememberDragStart({ x: data.x, y: data.y })}
         onDragStop={(_, data) => {
-          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+          if (!shouldCommitDrag({ x: data.x, y: data.y })) {
             return;
           }
 
@@ -145,9 +167,9 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
-        onDragStart={() => onSelect(command.id)}
+        onDragStart={(_, data) => rememberDragStart({ x: data.x, y: data.y })}
         onDragStop={(_, data) => {
-          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+          if (!shouldCommitDrag({ x: data.x, y: data.y })) {
             return;
           }
 
@@ -193,9 +215,9 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
-        onDragStart={() => onSelect(command.id)}
+        onDragStart={(_, data) => rememberDragStart({ x: data.x, y: data.y })}
         onDragStop={(_, data) => {
-          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+          if (!shouldCommitDrag({ x: data.x, y: data.y })) {
             return;
           }
 
@@ -226,9 +248,9 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
         bounds="parent"
         enableResizing={false}
         dragGrid={[1, 1]}
-        onDragStart={() => onSelect(command.id)}
+        onDragStart={(_, data) => rememberDragStart({ x: data.x, y: data.y })}
         onDragStop={(_, data) => {
-          if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+          if (!shouldCommitDrag({ x: data.x, y: data.y })) {
             return;
           }
 
@@ -258,9 +280,9 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
       bounds="parent"
       enableResizing={false}
       dragGrid={[1, 1]}
-      onDragStart={() => onSelect(command.id)}
+      onDragStart={(_, data) => rememberDragStart({ x: data.x, y: data.y })}
       onDragStop={(_, data) => {
-        if (!hasMeaningfulDrag(data.deltaX, data.deltaY)) {
+        if (!shouldCommitDrag({ x: data.x, y: data.y })) {
           return;
         }
 
