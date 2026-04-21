@@ -64,6 +64,14 @@ export type BarcodeElement = BaseElement & {
 
 export type CanvasElement = TextElement | BlackBoxElement | LineElement | BoxElement | BarcodeElement;
 
+export type LabelMetadata = {
+  dpi: number;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  offsetXDot: number;
+  offsetYDot: number;
+};
+
 export type LayoutDraft = {
   id: string;
   templateId?: number | null;
@@ -71,6 +79,7 @@ export type LayoutDraft = {
   name: string;
   reactContent?: string | null;
   elements: CanvasElement[];
+  metadata: LabelMetadata;
 };
 
 export type DataSourceConfig = {
@@ -145,3 +154,18 @@ export type NumberFieldArrowHandler = (
   min?: number,
   step?: number,
 ) => void;
+
+export type WizardElementChoice = {
+  type: ElementType;
+  binding: string;
+  label: string;
+};
+
+export type WizardResult = {
+  name: string;
+  labelWidthMm: number;
+  labelHeightMm: number;
+  jsonText: string;
+  records: DataRecord[];
+  selectedElements: WizardElementChoice[];
+};

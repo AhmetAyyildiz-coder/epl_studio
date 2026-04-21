@@ -1,7 +1,8 @@
-import type { CanvasElement, DataRecord, LayoutDraft } from "../designer/types";
+import type { CanvasElement, DataRecord, LabelMetadata, LayoutDraft } from "../designer/types";
+import { DEFAULT_METADATA } from "../designer/constants";
 import { buildReactTemplate } from "../designer/utils";
 
-const ETIKET_SABLONU_API_BASE_URL = "http://localhost:5105/api/common/etiket-sablonu";
+const ETIKET_SABLONU_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 type GeneralResponseDTO<T> = {
   resultCode: number;
@@ -28,13 +29,7 @@ type GetEtiketSablonuResponse = {
   count: number;
 };
 
-export type EtiketSablonuMetadata = {
-  dpi: number;
-  labelWidthMm: number;
-  labelHeightMm: number;
-  offsetXDot: number;
-  offsetYDot: number;
-};
+export type EtiketSablonuMetadata = LabelMetadata;
 
 type CreateEtiketSablonuRequest = {
   logId?: string | null;
@@ -179,6 +174,7 @@ export function toLayoutDraft(dto: EtiketSablonuDTO): LayoutDraft {
     name: dto.sablonAdi ?? "Adsiz Taslak",
     reactContent: dto.sablonReactIcerik ?? null,
     elements: deserializeLayoutElements(dto.sablonIcerik),
+    metadata: { ...DEFAULT_METADATA },
   };
 }
 

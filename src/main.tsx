@@ -7,6 +7,7 @@ import {
   createTheme,
 } from "@mui/material";
 import App from "./App";
+import { ErrorBoundary } from "./designer/components/ErrorBoundary";
 import "./style.css";
 
 const theme = createTheme({
@@ -86,7 +87,9 @@ ReactDOM.createRoot(document.getElementById("app")!).render(
           },
         }}
       />
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </ThemeProvider>
   </React.StrictMode>,
 );

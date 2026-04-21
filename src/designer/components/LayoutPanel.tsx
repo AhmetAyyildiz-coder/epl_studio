@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import {
   Button,
+  CircularProgress,
   IconButton,
   List,
   ListItemButton,
@@ -79,19 +80,30 @@ export function LayoutPanel({
         </Stack>
       </Stack>
       <List sx={{ p: 0 }}>
-        {layouts.map((layout) => (
-          <ListItemButton
-            key={layout.id}
-            selected={layout.id === selectedLayoutId}
-            onClick={() => onSelectLayout(layout.id)}
-            sx={{ mb: 1, borderRadius: 0 }}
-          >
-            <ListItemText
-              primary={layout.name}
-              secondary={`${layout.shortCode || "KOD-YOK"} • ${layout.elements.length} eleman`}
-            />
-          </ListItemButton>
-        ))}
+        {isLoadingRemoteLayouts && !layouts.length ? (
+          <Stack alignItems="center" py={4}>
+            <CircularProgress size={28} />
+            <Typography variant="body2" color="text.secondary" mt={1}>Sablonlar yukleniyor...</Typography>
+          </Stack>
+        ) : layouts.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
+            Henuz kayitli sablon yok.
+          </Typography>
+        ) : (
+          layouts.map((layout) => (
+            <ListItemButton
+              key={layout.id}
+              selected={layout.id === selectedLayoutId}
+              onClick={() => onSelectLayout(layout.id)}
+              sx={{ mb: 1, borderRadius: 0 }}
+            >
+              <ListItemText
+                primary={layout.name}
+                secondary={`${layout.shortCode || "KOD-YOK"} • ${layout.elements.length} eleman`}
+              />
+            </ListItemButton>
+          ))
+        )}
       </List>
     </Paper>
   );

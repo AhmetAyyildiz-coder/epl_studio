@@ -11,22 +11,18 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  DEFAULT_DPI,
   DEFAULT_PREVIEW_ZOOM,
-  DEFAULT_PRINT_OFFSET_X,
-  DEFAULT_PRINT_OFFSET_Y,
-  LABEL_HEIGHT_MM,
-  LABEL_WIDTH_DOTS,
-  LABEL_WIDTH_MM,
-  LABEL_HEIGHT_DOTS,
+  DOTS_PER_MM,
+  DEFAULT_METADATA,
+  LABEL_PRESETS,
   SAMPLE_DATA_JSON,
-  STORAGE_KEY,
 } from "./designer/constants";
 import { ElementPropertiesPanel } from "./designer/components/ElementPropertiesPanel";
 import { ToolboxPanel } from "./designer/components/ToolboxPanel";
 import { CanvasPanel } from "./designer/components/CanvasPanel";
 import { DataPanel } from "./designer/components/DataPanel";
 import { LayoutPanel } from "./designer/components/LayoutPanel";
+import { OnboardingWizard } from "./designer/components/OnboardingWizard";
 import { useDebounce } from "./designer/useDebounce";
 import {
   applyEplOffset,
@@ -37,12 +33,12 @@ import {
   emptyLayout,
   normalizeRecords,
   parseEplToElements,
-  readLayouts,
   submitEpl,
   uid,
+  wizardLayout,
 } from "./designer/utils";
 import { createEtiketSablonu, listEtiketSablonlari, updateEtiketSablonu, type EtiketSablonuMetadata } from "./services/etiketSablonuService";
-import type { CanvasElement, DataSourceConfig, ElementType, LayoutDraft, NumberFieldArrowHandler } from "./designer/types";
+import type { CanvasElement, DataSourceConfig, ElementType, LayoutDraft, NumberFieldArrowHandler, WizardResult } from "./designer/types";
 
 type RemoteLayoutFilters = {
   shortCode: string;
@@ -59,26 +55,15 @@ const HISTORY_LIMIT = 50;
 function cloneLayout(layout: LayoutDraft): LayoutDraft {
   return {
     ...layout,
+    metadata: { ...layout.metadata },
     elements: layout.elements.map((element) => ({ ...element })),
   };
 }
 
-function getInitialDesignerState() {
-  const layouts = readLayouts();
-  const firstLayout = layouts[0] ?? emptyLayout();
-
-  return {
-    layouts,
-    selectedLayoutId: firstLayout.id,
-    draft: cloneLayout(firstLayout),
-  };
-}
-
 export default function App() {
-  const [initialDesignerState] = useState(getInitialDesignerState);
-  const [layouts, setLayouts] = useState<LayoutDraft[]>(initialDesignerState.layouts);
-  const [selectedLayoutId, setSelectedLayoutId] = useState(initialDesignerState.selectedLayoutId);
-  const [draft, setDraft] = useState<LayoutDraft>(initialDesignerState.draft);
+  const [layouts, setLayouts] = useState<LayoutDraft[]>([]);
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<LayoutDraft>(emptyLayout());
   const [dataSource, setDataSource] = useState<DataSourceConfig>({ jsonText: SAMPLE_DATA_JSON });
   // Records ve seçili index'leri tek state'de yönet - birden fazla setState çağrısını önler
   const [recordsState, setRecordsState] = useState(() => ({
@@ -89,22 +74,23 @@ export default function App() {
   const records = recordsState.records;
   const selectedRecordIndex = recordsState.selectedRecordIndex;
   const selectedRecordIndexes = recordsState.selectedRecordIndexes;
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(() => initialDesignerState.draft.elements[0]?.id ?? null);
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<DraftHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<DraftHistoryEntry[]>([]);
-  const [printOffsetX, setPrintOffsetX] = useState(DEFAULT_PRINT_OFFSET_X);
-  const [printOffsetY, setPrintOffsetY] = useState(DEFAULT_PRINT_OFFSET_Y);
   const [previewZoom, setPreviewZoom] = useState(DEFAULT_PREVIEW_ZOOM);
   const [message, setMessage] = useState("Veri kaynagi yukleyin, canvas ustunde elemanlari tasiyin ve secili kayitlari yazdirin.");
-  const [isLoadingRemoteLayouts, setIsLoadingRemoteLayouts] = useState(false);
+  const [isLoadingRemoteLayouts, setIsLoadingRemoteLayouts] = useState(true);
   const [isSavingLayout, setIsSavingLayout] = useState(false);
   const [remoteLayoutFilters, setRemoteLayoutFilters] = useState<RemoteLayoutFilters>({ shortCode: "", name: "" });
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const debouncedJsonText = useDebounce(dataSource.jsonText, 500);
   const renderDraft = useMemo(() => ({ ...draft, elements: draft.elements }), [draft.elements]);
   const deferredEplDraft = useDeferredValue(renderDraft);
   const deferredSelectedRecordIndexes = useDeferredValue(selectedRecordIndexes);
   const draftRef = useRef(draft);
   const selectedElementIdRef = useRef<string | null>(selectedElementId);
+  const printOffsetX = draft.metadata.offsetXDot;
+  const printOffsetY = draft.metadata.offsetYDot;
 
   const setMessageOptimized = useCallback((nextMessage: string) => {
     setMessage(nextMessage);
@@ -205,13 +191,7 @@ export default function App() {
     () => buildReactTemplate(draft, activeRecord),
     [activeRecord, draft.elements, draft.name, draft.shortCode],
   );
-  const currentTemplateMetadata = useMemo<EtiketSablonuMetadata>(() => ({
-    dpi: DEFAULT_DPI,
-    labelWidthMm: LABEL_WIDTH_MM,
-    labelHeightMm: LABEL_HEIGHT_MM,
-    offsetXDot: printOffsetX,
-    offsetYDot: printOffsetY,
-  }), [printOffsetX, printOffsetY]);
+  const currentTemplateMetadata: EtiketSablonuMetadata = draft.metadata;
 
   const restoreHistoryEntry = useCallback((entry: DraftHistoryEntry) => {
     const restoredDraft = cloneLayout(entry.draft);
@@ -268,12 +248,15 @@ export default function App() {
       const bottom = top + command.height;
       const issues: string[] = [];
 
-      if (left < 0 || right > LABEL_WIDTH_DOTS) {
-        issues.push(`yatay sinir disi (${Math.max(0, right - LABEL_WIDTH_DOTS)} dot)`);
+      const metaWidthDots = Math.round(draft.metadata.labelWidthMm * DOTS_PER_MM);
+      const metaHeightDots = Math.round(draft.metadata.labelHeightMm * DOTS_PER_MM);
+
+      if (left < 0 || right > metaWidthDots) {
+        issues.push(`yatay sinir disi (${Math.max(0, right - metaWidthDots)} dot)`);
       }
 
-      if (top < 0 || bottom > LABEL_HEIGHT_DOTS) {
-        issues.push(`dikey sinir disi (${Math.max(0, bottom - LABEL_HEIGHT_DOTS)} dot)`);
+      if (top < 0 || bottom > metaHeightDots) {
+        issues.push(`dikey sinir disi (${Math.max(0, bottom - metaHeightDots)} dot)`);
       }
 
       return issues.length ? [`${label}: ${issues.join(", ")}`] : [];
@@ -292,10 +275,6 @@ export default function App() {
   }, [selectedElementId]);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
-  }, [layouts]);
-
-  useEffect(() => {
     let cancelled = false;
 
     async function loadRemoteLayouts() {
@@ -307,11 +286,11 @@ export default function App() {
 
         const remoteLayouts = response.result.data ?? [];
         if (!remoteLayouts.length) {
-          setMessageOptimized("API'de kayitli sablon bulunamadi. Yerel taslaklar kullaniliyor.");
+          setMessageOptimized("API'de kayitli sablon bulunamadi. Yeni sablon olusturun.");
           return;
         }
 
-        applyLayoutCollection(remoteLayouts, selectedLayoutId);
+        applyLayoutCollection(remoteLayouts);
         setMessageOptimized(`${remoteLayouts.length} sablon API'den yuklendi.`);
       } catch (error) {
         if (!cancelled) {
@@ -468,7 +447,7 @@ export default function App() {
 
   const searchRemoteLayouts = useCallback(() => {
     void loadRemoteLayouts(remoteLayoutFilters, {
-      preferredLayoutId: selectedLayoutId,
+      preferredLayoutId: selectedLayoutId ?? undefined,
       emptyMessage: "Veritabaninda filtreye uygun taslak bulunamadi.",
       successMessage: (count) => `${count} taslak veritabanindan getirildi.`,
     });
@@ -477,7 +456,7 @@ export default function App() {
   const resetRemoteLayoutSearch = useCallback(() => {
     setRemoteLayoutFilters({ shortCode: "", name: "" });
     void loadRemoteLayouts(undefined, {
-      preferredLayoutId: selectedLayoutId,
+      preferredLayoutId: selectedLayoutId ?? undefined,
       emptyMessage: "API'de kayitli sablon bulunamadi.",
       successMessage: (count) => `${count} taslak veritabanindan yenilendi.`,
     });
@@ -667,6 +646,32 @@ export default function App() {
     setMessageOptimized(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
   }, [currentEpl, printOffsetX, printOffsetY, pushUndoSnapshot, setMessageOptimized]);
 
+  const handleWizardComplete = useCallback((result: WizardResult) => {
+    const nextDraft = wizardLayout(result);
+    setDraft(nextDraft);
+    setSelectedLayoutId(nextDraft.id);
+    setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+    clearHistory();
+    setDataSource({ jsonText: result.jsonText });
+    setRecordsState({
+      records: result.records,
+      selectedRecordIndex: 0,
+      selectedRecordIndexes: [0],
+    });
+    setIsWizardOpen(false);
+    setMessageOptimized(`"${result.name}" olusturuldu.`);
+  }, [clearHistory, setMessageOptimized]);
+
+  const handleWizardSkip = useCallback(() => {
+    const nextDraft = emptyLayout();
+    setDraft(nextDraft);
+    setSelectedLayoutId(nextDraft.id);
+    setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+    clearHistory();
+    setIsWizardOpen(false);
+    setMessageOptimized("Bos taslak olusturuldu.");
+  }, [clearHistory, setMessageOptimized]);
+
   const handleNumberFieldArrow = useCallback<NumberFieldArrowHandler>((event, value, onValueChange, min = 0, step = 1) => {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
       return;
@@ -807,17 +812,11 @@ export default function App() {
             <Stack spacing={2}>
               <LayoutPanel
                 layouts={layouts}
-                selectedLayoutId={selectedLayoutId}
+                selectedLayoutId={selectedLayoutId ?? ""}
                 isLoadingRemoteLayouts={isLoadingRemoteLayouts}
                 remoteLayoutFilters={remoteLayoutFilters}
                 onSelectLayout={selectLayout}
-                onCreateNew={() => {
-                  const nextDraft = emptyLayout();
-                  setDraft(nextDraft);
-                  setSelectedLayoutId(nextDraft.id);
-                  setSelectedElementId(nextDraft.elements[0]?.id ?? null);
-                  clearHistory();
-                }}
+                onCreateNew={() => setIsWizardOpen(true)}
                 onUpdateFilter={updateRemoteFilter}
                 onSearchRemote={searchRemoteLayouts}
                 onResetRemoteSearch={resetRemoteLayoutSearch}
@@ -866,6 +865,7 @@ export default function App() {
 
               <CanvasPanel
                 draft={draft}
+                metadata={draft.metadata}
                 previewCommands={previewCommands}
                 selectedElementId={validSelectedElementId}
                 previewZoom={previewZoom}
@@ -879,8 +879,8 @@ export default function App() {
                 canUndo={undoStack.length > 0}
                 canRedo={redoStack.length > 0}
                 onSetPreviewZoom={(zoom) => setPreviewZoom(zoom)}
-                onSetPrintOffsetX={(value) => setPrintOffsetX(value)}
-                onSetPrintOffsetY={(value) => setPrintOffsetY(value)}
+                onSetPrintOffsetX={(value) => setDraft((prev) => ({ ...prev, metadata: { ...prev.metadata, offsetXDot: value } }))}
+                onSetPrintOffsetY={(value) => setDraft((prev) => ({ ...prev, metadata: { ...prev.metadata, offsetYDot: value } }))}
                 onSetEditedEpl={(value) => setEditedEpl(value)}
                 onSelectElement={setSelectedElementId}
                 onMoveElement={moveElement}
@@ -889,6 +889,7 @@ export default function App() {
                 onCopyReactTemplate={copyReactTemplateToClipboard}
                 onUndo={undoDraftChange}
                 onRedo={redoDraftChange}
+                onUpdateMetadata={(patch) => setDraft((prev) => ({ ...prev, metadata: { ...prev.metadata, ...patch } }))}
                 handleNumberFieldArrow={handleNumberFieldArrow}
               />
             </Stack>
@@ -920,6 +921,11 @@ export default function App() {
           </Grid>
         </Grid>
       </Stack>
+      <OnboardingWizard
+        open={isWizardOpen}
+        onComplete={handleWizardComplete}
+        onSkip={handleWizardSkip}
+      />
     </Box>
   );
 }

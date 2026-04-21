@@ -2,11 +2,12 @@ import { memo, useRef } from "react";
 import { Box } from "@mui/material";
 import Barcode from "react-barcode";
 import { Rnd } from "react-rnd";
-import { DEFAULT_PREVIEW_ZOOM, DOTS_PER_MM, LABEL_HEIGHT_DOTS, LABEL_WIDTH_DOTS, PREVIEW_SCALE } from "../constants";
-import type { PreviewCommand } from "../types";
+import { DEFAULT_PREVIEW_ZOOM, DOTS_PER_MM, PREVIEW_SCALE } from "../constants";
+import type { LabelMetadata, PreviewCommand } from "../types";
 
 type ElementPreviewProps = {
   commands: PreviewCommand[];
+  metadata: LabelMetadata;
   selectedId: string | null;
   zoom?: number;
   onSelect: (id: string) => void;
@@ -337,12 +338,15 @@ const PreviewItem = memo(function PreviewItem({ command, selected, scale, onSele
 
 export const ElementPreview = memo(function ElementPreview({
   commands,
+  metadata,
   selectedId,
   zoom = DEFAULT_PREVIEW_ZOOM,
   onSelect,
   onMove,
 }: ElementPreviewProps) {
   const effectiveScale = PREVIEW_SCALE * zoom;
+  const labelWidthDots = Math.round(metadata.labelWidthMm * DOTS_PER_MM);
+  const labelHeightDots = Math.round(metadata.labelHeightMm * DOTS_PER_MM);
 
   return (
     <Box
@@ -359,8 +363,8 @@ export const ElementPreview = memo(function ElementPreview({
       <Box
         sx={{
           position: "relative",
-          width: `${Math.round(LABEL_WIDTH_DOTS * effectiveScale)}px`,
-          height: `${Math.round(LABEL_HEIGHT_DOTS * effectiveScale)}px`,
+          width: `${Math.round(labelWidthDots * effectiveScale)}px`,
+          height: `${Math.round(labelHeightDots * effectiveScale)}px`,
           borderRadius: 0,
           overflow: "hidden",
           bgcolor: "#fffdfa",
@@ -372,8 +376,8 @@ export const ElementPreview = memo(function ElementPreview({
             position: "absolute",
             left: 0,
             top: 0,
-            width: `${LABEL_WIDTH_DOTS}px`,
-            height: `${LABEL_HEIGHT_DOTS}px`,
+            width: `${labelWidthDots}px`,
+            height: `${labelHeightDots}px`,
             overflow: "hidden",
             bgcolor: "#fffdfa",
             backgroundImage:

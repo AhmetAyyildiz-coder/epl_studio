@@ -1,6 +1,5 @@
-import type { TextFont } from "./types";
+import type { TextFont, LabelMetadata } from "./types";
 
-export const STORAGE_KEY = "epl-studio-layouts-v3";
 export const LABEL_WIDTH_MM = 60;
 export const LABEL_HEIGHT_MM = 35;
 export const DEFAULT_DPI = 300;
@@ -13,8 +12,41 @@ export const LABEL_HEIGHT_DOTS = Math.round(LABEL_HEIGHT_MM * DOTS_PER_MM);
 export const DEFAULT_PRINT_OFFSET_X = 260;
 export const DEFAULT_PRINT_OFFSET_Y = 8;
 
+export const DEFAULT_METADATA: LabelMetadata = {
+  dpi: DEFAULT_DPI,
+  labelWidthMm: LABEL_WIDTH_MM,
+  labelHeightMm: LABEL_HEIGHT_MM,
+  offsetXDot: DEFAULT_PRINT_OFFSET_X,
+  offsetYDot: DEFAULT_PRINT_OFFSET_Y,
+};
+
+export const LABEL_PRESETS = [
+  { label: "60 x 35 mm (Standart Fis)", widthMm: 60, heightMm: 35 },
+  { label: "40 x 25 mm", widthMm: 40, heightMm: 25 },
+  { label: "100 x 60 mm", widthMm: 100, heightMm: 60 },
+  { label: "Ozel Boyut", widthMm: 0, heightMm: 0 },
+];
+
 // Bitmap fontlar için sabit boyutlar
 export const FONT_HEIGHT_MAP: Record<TextFont, number> = { 1: 20, 2: 28, 3: 36, 4: 44 };
+
+// Black box font constants
+export const BLACK_BOX_FONT_HEIGHT_MAP: Record<TextFont, number> = {
+  1: 20,
+  2: 28,
+  3: 36,
+  4: 44,
+};
+
+export const BLACK_BOX_FONT_WIDTH_MAP: Record<TextFont, number> = {
+  1: 12,
+  2: 16,
+  3: 20,
+  4: 24,
+};
+
+export const BLACK_BOX_AUTO_HORIZONTAL_PADDING = 10;
+export const BLACK_BOX_AUTO_VERTICAL_PADDING = 4;
 
 export const SAMPLE_DATA_JSON = JSON.stringify(
   [
