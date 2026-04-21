@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -16,7 +16,9 @@ import {
   DEFAULT_PRINT_OFFSET_X,
   DEFAULT_PRINT_OFFSET_Y,
   LABEL_HEIGHT_MM,
+  LABEL_WIDTH_DOTS,
   LABEL_WIDTH_MM,
+  LABEL_HEIGHT_DOTS,
   SAMPLE_DATA_JSON,
   STORAGE_KEY,
 } from "./designer/constants";
@@ -46,6 +48,13 @@ type RemoteLayoutFilters = {
   shortCode: string;
   name: string;
 };
+
+type DraftHistoryEntry = {
+  draft: LayoutDraft;
+  selectedElementId: string | null;
+};
+
+const HISTORY_LIMIT = 50;
 
 function cloneLayout(layout: LayoutDraft): LayoutDraft {
   return {
@@ -81,6 +90,8 @@ export default function App() {
   const selectedRecordIndex = recordsState.selectedRecordIndex;
   const selectedRecordIndexes = recordsState.selectedRecordIndexes;
   const [selectedElementId, setSelectedElementId] = useState<string | null>(() => initialDesignerState.draft.elements[0]?.id ?? null);
+  const [undoStack, setUndoStack] = useState<DraftHistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<DraftHistoryEntry[]>([]);
   const [printOffsetX, setPrintOffsetX] = useState(DEFAULT_PRINT_OFFSET_X);
   const [printOffsetY, setPrintOffsetY] = useState(DEFAULT_PRINT_OFFSET_Y);
   const [previewZoom, setPreviewZoom] = useState(DEFAULT_PREVIEW_ZOOM);
@@ -92,10 +103,28 @@ export default function App() {
   const renderDraft = useMemo(() => ({ ...draft, elements: draft.elements }), [draft.elements]);
   const deferredEplDraft = useDeferredValue(renderDraft);
   const deferredSelectedRecordIndexes = useDeferredValue(selectedRecordIndexes);
+  const draftRef = useRef(draft);
+  const selectedElementIdRef = useRef<string | null>(selectedElementId);
 
   const setMessageOptimized = useCallback((nextMessage: string) => {
     setMessage(nextMessage);
   }, []);
+
+  const createHistoryEntry = useCallback((layout: LayoutDraft, nextSelectedElementId: string | null): DraftHistoryEntry => ({
+    draft: cloneLayout(layout),
+    selectedElementId: nextSelectedElementId,
+  }), []);
+
+  const clearHistory = useCallback(() => {
+    setUndoStack([]);
+    setRedoStack([]);
+  }, []);
+
+  const pushUndoSnapshot = useCallback(() => {
+    const snapshot = createHistoryEntry(draftRef.current, selectedElementIdRef.current);
+    setUndoStack((prev) => [...prev.slice(-(HISTORY_LIMIT - 1)), snapshot]);
+    setRedoStack([]);
+  }, [createHistoryEntry]);
 
   const applyLayoutCollection = useCallback((nextLayouts: LayoutDraft[], preferredLayoutId?: string) => {
     if (!nextLayouts.length) {
@@ -109,7 +138,8 @@ export default function App() {
     setSelectedLayoutId(nextActiveLayout.id);
     setDraft(nextDraft);
     setSelectedElementId(nextDraft.elements[0]?.id ?? null);
-  }, []);
+    clearHistory();
+  }, [clearHistory]);
 
   const loadRemoteLayouts = useCallback(
     async (
@@ -141,11 +171,12 @@ export default function App() {
   );
 
   const updateElement = useCallback((id: string, patch: Partial<CanvasElement>) => {
+    pushUndoSnapshot();
     setDraft((prev) => ({
       ...prev,
       elements: prev.elements.map((element) => (element.id === id ? ({ ...element, ...patch } as CanvasElement) : element)),
     }));
-  }, []);
+  }, [pushUndoSnapshot]);
 
   const activeRecord = records[selectedRecordIndex];
   const deferredActiveRecord = useDeferredValue(activeRecord);
@@ -182,8 +213,83 @@ export default function App() {
     offsetYDot: printOffsetY,
   }), [printOffsetX, printOffsetY]);
 
+  const restoreHistoryEntry = useCallback((entry: DraftHistoryEntry) => {
+    const restoredDraft = cloneLayout(entry.draft);
+    setDraft(restoredDraft);
+    setSelectedElementId(
+      entry.selectedElementId && restoredDraft.elements.some((element) => element.id === entry.selectedElementId)
+        ? entry.selectedElementId
+        : restoredDraft.elements[0]?.id ?? null,
+    );
+  }, []);
+
+  const undoDraftChange = useCallback(() => {
+    setUndoStack((prev) => {
+      const previousEntry = prev[prev.length - 1];
+      if (!previousEntry) {
+        return prev;
+      }
+
+      setRedoStack((currentRedo) => [...currentRedo.slice(-(HISTORY_LIMIT - 1)), createHistoryEntry(draftRef.current, selectedElementIdRef.current)]);
+      restoreHistoryEntry(previousEntry);
+      setMessageOptimized("Geri alindi.");
+      return prev.slice(0, -1);
+    });
+  }, [createHistoryEntry, restoreHistoryEntry, setMessageOptimized]);
+
+  const redoDraftChange = useCallback(() => {
+    setRedoStack((prev) => {
+      const nextEntry = prev[prev.length - 1];
+      if (!nextEntry) {
+        return prev;
+      }
+
+      setUndoStack((currentUndo) => [...currentUndo.slice(-(HISTORY_LIMIT - 1)), createHistoryEntry(draftRef.current, selectedElementIdRef.current)]);
+      restoreHistoryEntry(nextEntry);
+      setMessageOptimized("Ileri alindi.");
+      return prev.slice(0, -1);
+    });
+  }, [createHistoryEntry, restoreHistoryEntry, setMessageOptimized]);
+
+  const overflowWarnings = useMemo(() => {
+    return previewCommands.flatMap((command) => {
+      const sourceElement = draft.elements.find((element) => element.id === command.id);
+      const label = sourceElement?.label || command.id;
+      const left =
+        command.type === "text"
+          ? command.align === "right"
+            ? command.x - command.width
+            : command.align === "center"
+              ? command.x - Math.round(command.width / 2)
+              : command.x
+          : command.x;
+      const top = command.y;
+      const right = left + command.width;
+      const bottom = top + command.height;
+      const issues: string[] = [];
+
+      if (left < 0 || right > LABEL_WIDTH_DOTS) {
+        issues.push(`yatay sinir disi (${Math.max(0, right - LABEL_WIDTH_DOTS)} dot)`);
+      }
+
+      if (top < 0 || bottom > LABEL_HEIGHT_DOTS) {
+        issues.push(`dikey sinir disi (${Math.max(0, bottom - LABEL_HEIGHT_DOTS)} dot)`);
+      }
+
+      return issues.length ? [`${label}: ${issues.join(", ")}`] : [];
+    });
+  }, [draft.elements, previewCommands]);
+
   // Edited EPL state - kullanıcı manuel düzenleme yaptığında kullanılır
   const [editedEpl, setEditedEpl] = useState<string>("");
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    selectedElementIdRef.current = selectedElementId;
+  }, [selectedElementId]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
@@ -266,9 +372,10 @@ export default function App() {
     setSelectedLayoutId(layout.id);
     setDraft(nextDraft);
     setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+    clearHistory();
     setEditedEpl(""); // EPL çıktısını sıfırla - yeni taslak için yeniden hesaplansın
     setMessageOptimized(`"${layout.name}" acildi.`);
-  }, [layouts, setMessageOptimized]);
+  }, [clearHistory, layouts, setMessageOptimized]);
 
   const saveLayout = useCallback(() => {
     if (!draft.name.trim()) {
@@ -319,6 +426,7 @@ export default function App() {
   }, [activeRecord, currentTemplateMetadata, draft, setMessageOptimized]);
 
   const duplicateLayout = useCallback(() => {
+    pushUndoSnapshot();
     setDraft((prev) => {
       const nextDraft = {
         ...cloneLayout(prev),
@@ -332,24 +440,27 @@ export default function App() {
       setMessageOptimized("Taslak kopyalandi.");
       return nextDraft;
     });
-  }, [setMessageOptimized]);
+  }, [pushUndoSnapshot, setMessageOptimized]);
 
   const resetLayout = useCallback(() => {
+    pushUndoSnapshot();
     setDraft(() => {
       const nextDraft = emptyLayout(draft.name);
       setSelectedElementId(nextDraft.elements[0]?.id ?? null);
       setMessageOptimized("Canvas sifirlandi.");
       return nextDraft;
     });
-  }, [draft.name, setMessageOptimized]);
+  }, [draft.name, pushUndoSnapshot, setMessageOptimized]);
 
   const updateDraftName = useCallback((name: string) => {
+    pushUndoSnapshot();
     setDraft((prev) => ({ ...prev, name }));
-  }, []);
+  }, [pushUndoSnapshot]);
 
   const updateDraftShortCode = useCallback((shortCode: string) => {
+    pushUndoSnapshot();
     setDraft((prev) => ({ ...prev, shortCode }));
-  }, []);
+  }, [pushUndoSnapshot]);
 
   const updateRemoteFilter = useCallback((field: keyof RemoteLayoutFilters, value: string) => {
     setRemoteLayoutFilters((prev) => ({ ...prev, [field]: value }));
@@ -374,6 +485,7 @@ export default function App() {
 
   const addElement = useCallback((type: ElementType) => {
     startTransition(() => {
+      pushUndoSnapshot();
       setDraft((prev) => {
         const element = createElementByType(type, prev.elements);
         setSelectedElementId(element.id);
@@ -381,20 +493,21 @@ export default function App() {
         return { ...prev, elements: [...prev.elements, element] };
       });
     });
-  }, [setMessageOptimized]);
+  }, [pushUndoSnapshot, setMessageOptimized]);
 
   const removeSelectedElement = useCallback(() => {
     if (!selectedElementId) {
       return;
     }
 
+    pushUndoSnapshot();
     setDraft((prev) => ({
       ...prev,
       elements: prev.elements.filter((element) => element.id !== selectedElementId),
     }));
     setSelectedElementId(null);
     setMessageOptimized("Eleman silindi.");
-  }, [selectedElementId, setMessageOptimized]);
+  }, [pushUndoSnapshot, selectedElementId, setMessageOptimized]);
 
   const duplicateSelectedElement = useCallback(() => {
     if (!selectedElementId) {
@@ -407,6 +520,7 @@ export default function App() {
       return;
     }
 
+    pushUndoSnapshot();
     setDraft((prev) => {
       const clonedElement: CanvasElement = {
         ...elementToClone,
@@ -422,15 +536,16 @@ export default function App() {
       setMessageOptimized(`"${clonedElement.label}" olusturuldu.`);
       return { ...prev, elements: newElements };
     });
-  }, [selectedElementId, draft.elements, setMessageOptimized]);
+  }, [pushUndoSnapshot, selectedElementId, draft.elements, setMessageOptimized]);
 
   const clearAllElements = useCallback(() => {
+    pushUndoSnapshot();
     setDraft((prev) => ({ ...prev, elements: [] }));
     setSelectedElementId(null);
     setMessageOptimized("Tum elemanlar temizlendi.");
-  }, [setMessageOptimized]);
+  }, [pushUndoSnapshot, setMessageOptimized]);
 
-  // Keyboard shortcuts - Delete ve Ctrl+D
+  // Keyboard shortcuts - Delete, Ctrl+D, Ctrl+Z, Ctrl+Shift+Z / Ctrl+Y
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target;
@@ -446,15 +561,26 @@ export default function App() {
         return;
       }
 
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redoDraftChange();
+        } else {
+          undoDraftChange();
+        }
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redoDraftChange();
+        return;
+      }
+
       // Delete - Eleman sil
       if (event.key === "Delete" && selectedElementId) {
         event.preventDefault();
-        setDraft((prev) => ({
-          ...prev,
-          elements: prev.elements.filter((element) => element.id !== selectedElementId),
-        }));
-        setSelectedElementId(null);
-        setMessageOptimized("Eleman silindi.");
+        removeSelectedElement();
         return;
       }
 
@@ -467,7 +593,7 @@ export default function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedElementId, setMessageOptimized, duplicateSelectedElement]);
+  }, [duplicateSelectedElement, redoDraftChange, removeSelectedElement, selectedElementId, undoDraftChange]);
 
   const applyJsonData = useCallback(() => {
     try {
@@ -535,10 +661,11 @@ export default function App() {
       return;
     }
 
+    pushUndoSnapshot();
     setDraft((prev) => ({ ...prev, elements: parsed }));
     setSelectedElementId(parsed[0]?.id ?? null);
     setMessageOptimized(`${parsed.length} eleman EPL'den parse edilip preview'e uygulandi.`);
-  }, [currentEpl, printOffsetX, printOffsetY, setMessageOptimized]);
+  }, [currentEpl, printOffsetX, printOffsetY, pushUndoSnapshot, setMessageOptimized]);
 
   const handleNumberFieldArrow = useCallback<NumberFieldArrowHandler>((event, value, onValueChange, min = 0, step = 1) => {
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
@@ -689,6 +816,7 @@ export default function App() {
                   setDraft(nextDraft);
                   setSelectedLayoutId(nextDraft.id);
                   setSelectedElementId(nextDraft.elements[0]?.id ?? null);
+                  clearHistory();
                 }}
                 onUpdateFilter={updateRemoteFilter}
                 onSearchRemote={searchRemoteLayouts}
@@ -747,6 +875,9 @@ export default function App() {
                 currentReactTemplate={currentReactTemplate}
                 editedEpl={editedEpl}
                 records={records}
+                overflowWarnings={overflowWarnings}
+                canUndo={undoStack.length > 0}
+                canRedo={redoStack.length > 0}
                 onSetPreviewZoom={(zoom) => setPreviewZoom(zoom)}
                 onSetPrintOffsetX={(value) => setPrintOffsetX(value)}
                 onSetPrintOffsetY={(value) => setPrintOffsetY(value)}
@@ -756,6 +887,8 @@ export default function App() {
                 onApplyEpl={applyEditedEplToPreview}
                 onCopyEpl={copyEplToClipboard}
                 onCopyReactTemplate={copyReactTemplateToClipboard}
+                onUndo={undoDraftChange}
+                onRedo={redoDraftChange}
                 handleNumberFieldArrow={handleNumberFieldArrow}
               />
             </Stack>

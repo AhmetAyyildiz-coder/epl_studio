@@ -32,6 +32,9 @@ interface CanvasPanelProps {
   currentReactTemplate: string;
   editedEpl: string;
   records: DataRecord[];
+  overflowWarnings: string[];
+  canUndo: boolean;
+  canRedo: boolean;
   onSetPreviewZoom: (zoom: number) => void;
   onSetPrintOffsetX: (value: number) => void;
   onSetPrintOffsetY: (value: number) => void;
@@ -41,6 +44,8 @@ interface CanvasPanelProps {
   onApplyEpl: () => void;
   onCopyEpl: () => void;
   onCopyReactTemplate: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
   handleNumberFieldArrow: NumberFieldArrowHandler;
 }
 
@@ -55,6 +60,9 @@ export function CanvasPanel({
   currentReactTemplate,
   editedEpl,
   records,
+  overflowWarnings,
+  canUndo,
+  canRedo,
   onSetPreviewZoom,
   onSetPrintOffsetX,
   onSetPrintOffsetY,
@@ -64,6 +72,8 @@ export function CanvasPanel({
   onApplyEpl,
   onCopyEpl,
   onCopyReactTemplate,
+  onUndo,
+  onRedo,
   handleNumberFieldArrow,
 }: CanvasPanelProps) {
   const datasetKeys = useMemo(
@@ -80,7 +90,13 @@ export function CanvasPanel({
             <Chip label={`${LABEL_WIDTH_MM}mm x ${LABEL_HEIGHT_MM}mm`} size="small" />
             <Chip label={`${LABEL_WIDTH_DOTS} x ${LABEL_HEIGHT_DOTS} dot`} size="small" />
           </Stack>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Button variant="outlined" size="small" onClick={onUndo} disabled={!canUndo}>
+              Geri Al
+            </Button>
+            <Button variant="outlined" size="small" onClick={onRedo} disabled={!canRedo}>
+              Ileri Al
+            </Button>
             <TextField
               select
               size="small"
@@ -135,6 +151,11 @@ export function CanvasPanel({
           onSelect={onSelectElement}
           onMove={onMoveElement}
         />
+        {overflowWarnings.length ? (
+          <Alert severity="warning" sx={{ mt: 2, borderRadius: 0 }}>
+            {overflowWarnings.slice(0, 4).join(" | ")}
+          </Alert>
+        ) : null}
       </Paper>
 
       <Paper sx={{ p: 2 }}>
