@@ -1,8 +1,7 @@
 import {
   FONT_HEIGHT_MAP,
   BLACK_BOX_AUTO_HORIZONTAL_PADDING,
-  LABEL_HEIGHT_DOTS,
-  LABEL_WIDTH_DOTS,
+  DOTS_PER_MM,
 } from "./constants";
 import type {
   BarcodeElement,
@@ -166,6 +165,9 @@ function renderTemplateBarcodeElement(element: BarcodeElement, record?: DataReco
 }
 
 export function buildReactTemplate(layout: LayoutDraft, record?: DataRecord) {
+  const labelWidthDots = Math.round(layout.metadata.labelWidthMm * DOTS_PER_MM);
+  const labelHeightDots = Math.round(layout.metadata.labelHeightMm * DOTS_PER_MM);
+
   const children = layout.elements.map((element) => {
     switch (element.type) {
       case "text":
@@ -183,8 +185,8 @@ export function buildReactTemplate(layout: LayoutDraft, record?: DataRecord) {
 
   return `<div data-epl-template="true" data-template-name="${escapeHtml(layout.name)}" data-template-short-code="${escapeHtml(layout.shortCode)}" style="${styleToString({
     position: "relative",
-    width: `${LABEL_WIDTH_DOTS}px`,
-    height: `${LABEL_HEIGHT_DOTS}px`,
+    width: `${labelWidthDots}px`,
+    height: `${labelHeightDots}px`,
     overflow: "hidden",
     background: "#fffdfa",
     boxSizing: "border-box",
