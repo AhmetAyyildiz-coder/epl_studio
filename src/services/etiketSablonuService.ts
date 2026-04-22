@@ -1,7 +1,8 @@
-import type { CanvasElement, DataRecord, LayoutDraft } from "../designer/types";
+import type { CanvasElement, DataRecord, LabelMetadata, LayoutDraft } from "../designer/types";
+import { DEFAULT_METADATA } from "../designer/constants";
 import { buildReactTemplate } from "../designer/utils";
 
-const ETIKET_SABLONU_API_BASE_URL = "http://localhost:5105/api/common/etiket-sablonu";
+const ETIKET_SABLONU_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 type GeneralResponseDTO<T> = {
   resultCode: number;
@@ -28,13 +29,7 @@ type GetEtiketSablonuResponse = {
   count: number;
 };
 
-export type EtiketSablonuMetadata = {
-  dpi: number;
-  labelWidthMm: number;
-  labelHeightMm: number;
-  offsetXDot: number;
-  offsetYDot: number;
-};
+export type EtiketSablonuMetadata = LabelMetadata;
 
 type CreateEtiketSablonuRequest = {
   logId?: string | null;
@@ -90,9 +85,22 @@ type ProblemDetails = {
   status?: number | null;
 };
 
-type StoredSablonIcerik = {
+type StoredSablonIcerikV1 = {
   version: 1;
   elements: CanvasElement[];
+};
+
+type StoredSablonIcerikV2 = {
+  version: 2;
+  elements: CanvasElement[];
+  metadata: LabelMetadata;
+};
+
+type StoredSablonIcerik = StoredSablonIcerikV1 | StoredSablonIcerikV2;
+
+type ParsedSablonIcerik = {
+  elements: CanvasElement[];
+  metadata: LabelMetadata | null;
 };
 
 export type EtiketSablonuListQuery = {
@@ -146,39 +154,47 @@ async function request<T>(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 function serializeLayout(layout: LayoutDraft) {
-  const payload: StoredSablonIcerik = {
-    version: 1,
+  const payload: StoredSablonIcerikV2 = {
+    version: 2,
     elements: layout.elements,
+    metadata: layout.metadata,
   };
 
   return JSON.stringify(payload);
 }
 
-function deserializeLayoutElements(rawValue: string | null) {
+function deserializeSablonIcerik(rawValue: string | null): ParsedSablonIcerik {
   if (!rawValue) {
-    return [];
+    return { elements: [], metadata: null };
   }
 
   try {
     const parsed = JSON.parse(rawValue) as StoredSablonIcerik | CanvasElement[];
     if (Array.isArray(parsed)) {
-      return parsed;
+      return { elements: parsed, metadata: null };
     }
 
-    return parsed.elements ?? [];
+    if (parsed.version === 2) {
+      return { elements: parsed.elements ?? [], metadata: parsed.metadata ?? null };
+    }
+
+    // version 1: metadata was not stored, fall back to DEFAULT_METADATA at call site
+    return { elements: parsed.elements ?? [], metadata: null };
   } catch {
-    return [];
+    return { elements: [], metadata: null };
   }
 }
 
 export function toLayoutDraft(dto: EtiketSablonuDTO): LayoutDraft {
+  const { elements, metadata } = deserializeSablonIcerik(dto.sablonIcerik);
   return {
     id: `remote-${dto.id}`,
     templateId: dto.id,
     shortCode: dto.kisaKod ?? "",
     name: dto.sablonAdi ?? "Adsiz Taslak",
     reactContent: dto.sablonReactIcerik ?? null,
-    elements: deserializeLayoutElements(dto.sablonIcerik),
+    elements,
+    metadata: metadata ?? { ...DEFAULT_METADATA },
   };
 }
 

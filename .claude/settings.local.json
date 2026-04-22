@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node ./node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(echo \"DONE:$?\")"
     ]
   }
 }

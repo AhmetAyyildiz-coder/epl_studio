@@ -10,19 +10,17 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  DEFAULT_DPI,
+  DOTS_PER_MM,
   FIELD_LABELS,
-  LABEL_HEIGHT_DOTS,
-  LABEL_HEIGHT_MM,
-  LABEL_WIDTH_DOTS,
-  LABEL_WIDTH_MM,
+  LABEL_PRESETS,
 } from "../constants";
 import { ElementPreview } from "./ElementPreview";
-import type { CanvasElement, DataRecord, NumberFieldArrowHandler, PreviewCommand } from "../types";
+import type { CanvasElement, DataRecord, LabelMetadata, NumberFieldArrowHandler, PreviewCommand } from "../types";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 interface CanvasPanelProps {
   draft: { elements: CanvasElement[] };
+  metadata: LabelMetadata;
   previewCommands: PreviewCommand[];
   selectedElementId: string | null;
   previewZoom: number;
@@ -46,11 +44,13 @@ interface CanvasPanelProps {
   onCopyReactTemplate: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  onUpdateMetadata: (patch: Partial<LabelMetadata>) => void;
   handleNumberFieldArrow: NumberFieldArrowHandler;
 }
 
 export function CanvasPanel({
   draft,
+  metadata,
   previewCommands,
   selectedElementId,
   previewZoom,
@@ -74,8 +74,13 @@ export function CanvasPanel({
   onCopyReactTemplate,
   onUndo,
   onRedo,
+  onUpdateMetadata,
   handleNumberFieldArrow,
 }: CanvasPanelProps) {
+  const matchedPreset = LABEL_PRESETS.find(
+    (p) => p.widthMm === metadata.labelWidthMm && p.heightMm === metadata.labelHeightMm,
+  );
+  const isCustomSize = !matchedPreset || matchedPreset.widthMm === 0;
   const datasetKeys = useMemo(
     () => Array.from(new Set(records.flatMap((record) => Object.keys(record)))),
     [records],
@@ -85,10 +90,43 @@ export function CanvasPanel({
     <Stack spacing={2}>
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} mb={2}>
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            <Chip label={`${DEFAULT_DPI} DPI`} size="small" />
-            <Chip label={`${LABEL_WIDTH_MM}mm x ${LABEL_HEIGHT_MM}mm`} size="small" />
-            <Chip label={`${LABEL_WIDTH_DOTS} x ${LABEL_HEIGHT_DOTS} dot`} size="small" />
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+            <TextField
+              select
+              size="small"
+              label="Etiket Boyutu"
+              value={isCustomSize ? "custom" : `${metadata.labelWidthMm}x${metadata.labelHeightMm}`}
+              onChange={(event) => {
+                const val = event.target.value;
+                if (val === "custom") return;
+                const preset = LABEL_PRESETS.find((p) => `${p.widthMm}x${p.heightMm}` === val);
+                if (preset) onUpdateMetadata({ labelWidthMm: preset.widthMm, labelHeightMm: preset.heightMm });
+              }}
+              sx={{ minWidth: 180 }}
+            >
+              {LABEL_PRESETS.filter((p) => p.widthMm > 0).map((p) => (
+                <MenuItem key={`${p.widthMm}x${p.heightMm}`} value={`${p.widthMm}x${p.heightMm}`}>{p.label}</MenuItem>
+              ))}
+              <MenuItem value="custom">Ozel Boyut</MenuItem>
+            </TextField>
+            <TextField
+              size="small"
+              label="Genislik (mm)"
+              type="number"
+              value={metadata.labelWidthMm}
+              onChange={(event) => onUpdateMetadata({ labelWidthMm: Math.max(1, Number(event.target.value) || 1) })}
+              sx={{ width: 110 }}
+            />
+            <TextField
+              size="small"
+              label="Yukseklik (mm)"
+              type="number"
+              value={metadata.labelHeightMm}
+              onChange={(event) => onUpdateMetadata({ labelHeightMm: Math.max(1, Number(event.target.value) || 1) })}
+              sx={{ width: 110 }}
+            />
+            <Chip label={`${metadata.dpi} DPI`} size="small" />
+            <Chip label={`${Math.round(metadata.labelWidthMm * DOTS_PER_MM)} x ${Math.round(metadata.labelHeightMm * DOTS_PER_MM)} dot`} size="small" />
           </Stack>
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             <Button variant="outlined" size="small" onClick={onUndo} disabled={!canUndo}>
@@ -146,6 +184,7 @@ export function CanvasPanel({
         <ElementPreview
           key={draft.elements.length}
           commands={previewCommands}
+          metadata={metadata}
           selectedId={selectedElementId}
           zoom={previewZoom}
           onSelect={onSelectElement}
