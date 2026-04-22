@@ -123,7 +123,7 @@ export function OnboardingWizard({ open, onComplete, onSkip }: Props) {
   return (
     <Dialog open={open} fullWidth maxWidth="sm" onClose={handleSkip}>
       <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h6" fontWeight={700}>Yeni Etiket Olustur</Typography>
+        Yeni Etiket Olustur
       </DialogTitle>
 
       <Stepper activeStep={activeStep} sx={{ px: 3 }}>
