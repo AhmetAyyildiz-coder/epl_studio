@@ -13,8 +13,6 @@ import {
 import {
   DEFAULT_PREVIEW_ZOOM,
   DOTS_PER_MM,
-  DEFAULT_METADATA,
-  LABEL_PRESETS,
   SAMPLE_DATA_JSON,
 } from "./designer/constants";
 import { ElementPropertiesPanel } from "./designer/components/ElementPropertiesPanel";
