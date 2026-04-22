@@ -151,9 +151,10 @@ export function emptyLayout(name = "Yeni Taslak"): LayoutDraft {
 export function wizardLayout(result: WizardResult): LayoutDraft {
   const elements: CanvasElement[] = [];
   const labelWidthDots = Math.round(result.labelWidthMm * DOTS_PER_MM);
+  const labelHeightDots = Math.round(result.labelHeightMm * DOTS_PER_MM);
 
   for (const choice of result.selectedElements) {
-    const { baseX, baseY } = getNextElementPosition(elements);
+    const { baseX, baseY } = getNextElementPosition(elements, labelHeightDots);
 
     if (choice.type === "text") {
       const proportionalWrapWidth = Math.round(labelWidthDots * 0.3);
@@ -260,20 +261,20 @@ export function getElementBottom(element: CanvasElement) {
   }
 }
 
-export function getNextElementPosition(elements: CanvasElement[]) {
+export function getNextElementPosition(elements: CanvasElement[], labelHeightDots: number = LABEL_HEIGHT_DOTS) {
   const baseX = 30;
   let baseY = 40;
 
   if (elements.length > 0) {
     const maxBottom = Math.max(...elements.map((element) => getElementBottom(element)));
-    baseY = Math.min(LABEL_HEIGHT_DOTS - 40, maxBottom + 12);
+    baseY = Math.min(labelHeightDots - 40, maxBottom + 12);
   }
 
   return { baseX, baseY };
 }
 
-export function createElementByType(type: ElementType, elements: CanvasElement[]) {
-  const { baseX, baseY } = getNextElementPosition(elements);
+export function createElementByType(type: ElementType, elements: CanvasElement[], labelHeightDots?: number) {
+  const { baseX, baseY } = getNextElementPosition(elements, labelHeightDots);
 
   if (type === "text") {
     return textElement("Yeni Metin", "", baseX, baseY, 2);

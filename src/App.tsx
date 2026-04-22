@@ -464,7 +464,7 @@ export default function App() {
     startTransition(() => {
       pushUndoSnapshot();
       setDraft((prev) => {
-        const element = createElementByType(type, prev.elements);
+        const element = createElementByType(type, prev.elements, Math.round(prev.metadata.labelHeightMm * DOTS_PER_MM));
         setSelectedElementId(element.id);
         setMessageOptimized(`${type} elemani eklendi.`);
         return { ...prev, elements: [...prev.elements, element] };
