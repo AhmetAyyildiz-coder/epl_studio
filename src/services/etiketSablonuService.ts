@@ -175,7 +175,7 @@ function deserializeSablonIcerik(rawValue: string | null): ParsedSablonIcerik {
     }
 
     if (parsed.version === 2) {
-      return { elements: parsed.elements ?? [], metadata: parsed.metadata };
+      return { elements: parsed.elements ?? [], metadata: parsed.metadata ?? null };
     }
 
     // version 1: metadata was not stored, fall back to DEFAULT_METADATA at call site
