@@ -2,6 +2,8 @@ import {
   FONT_HEIGHT_MAP,
   BLACK_BOX_AUTO_HORIZONTAL_PADDING,
   DOTS_PER_MM,
+  LABEL_WIDTH_MM,
+  LABEL_HEIGHT_MM,
 } from "./constants";
 import type {
   BarcodeElement,
@@ -165,8 +167,8 @@ function renderTemplateBarcodeElement(element: BarcodeElement, record?: DataReco
 }
 
 export function buildReactTemplate(layout: LayoutDraft, record?: DataRecord) {
-  const labelWidthDots = Math.round(layout.metadata.labelWidthMm * DOTS_PER_MM);
-  const labelHeightDots = Math.round(layout.metadata.labelHeightMm * DOTS_PER_MM);
+  const labelWidthDots = Math.round((layout.metadata?.labelWidthMm ?? LABEL_WIDTH_MM) * DOTS_PER_MM);
+  const labelHeightDots = Math.round((layout.metadata?.labelHeightMm ?? LABEL_HEIGHT_MM) * DOTS_PER_MM);
 
   const children = layout.elements.map((element) => {
     switch (element.type) {
